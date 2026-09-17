@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -177,24 +178,34 @@ def cache_set(cache_dir, kind, target, value):
     try:
         os.makedirs(cache_dir, exist_ok=True)
         p = cache_path(cache_dir, kind, target)
-        tmp = p + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"ts": time.time(), "value": value}, f, ensure_ascii=False)
-        os.replace(tmp, p)  # 原子替换，避免并发写坏文件
+        _atomic_json_dump(p, {"ts": time.time(), "value": value})
     except Exception:
         pass
 
 
-def atomic_write_json(path, data):
-    """原子写 JSON：先写 .tmp 再 replace，避免写到一半崩溃留下坏文件。"""
+def _atomic_json_dump(path, data, indent=None):
+    """同目录唯一临时文件 + replace，避免多进程争用固定 .tmp 路径。"""
     d = os.path.dirname(os.path.abspath(path))
     if d and not os.path.isdir(d):
         os.makedirs(d, exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    os.replace(tmp, path)
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", suffix=".tmp", dir=d)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=indent)
+            if indent is not None:
+                f.write("\n")
+        os.replace(tmp, path)
+    finally:
+        try:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def atomic_write_json(path, data):
+    """原子写 JSON：先写 .tmp 再 replace，避免写到一半崩溃留下坏文件。"""
+    _atomic_json_dump(path, data, indent=2)
 
 
 def run_with_retry(fn, retries=1, delay=0.4):

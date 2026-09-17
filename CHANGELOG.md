@@ -41,6 +41,7 @@
 - 仓库与所有 URL：`cndoin/dehallucination` → `cndoin/touchstone`
 - 修复 Windows 下 `subagent_gate.py` 未将标准输入切换为 UTF-8、可能漏检中文完成断言的问题
 - 修复 `audit.py` 未处理 `--help` / 未知参数及 Python 3.8 后备标准库清单不全的问题
+- 修复并发账本与缓存写入共用固定 `.tmp` 文件名导致的跨进程竞争
 - `SKILL.md` / `i18n/en/SKILL.md` 的 `name` 字段 → `touchstone`
 - **标题去掉版本号**（`# Touchstone · 反幻觉工程套件`）—— 版本号写在标题里只会持续漂移
 - `LICENSE` / `NOTICE` / `CITATION.cff` 版权行 → `Touchstone contributors`
