@@ -36,9 +36,9 @@ except AttributeError:
     STDLIB = {
         "argparse", "ast", "base64", "bisect", "calendar", "collections", "concurrent",
         "contextlib", "csv", "ctypes", "dataclasses", "datetime", "difflib", "enum",
-        "fnmatch", "functools", "getpass", "glob", "hashlib", "heapq", "hmac", "io",
-        "itertools", "json", "logging", "math", "os", "pathlib", "pickle", "platform",
-        "pprint", "queue", "random", "re", "shlex", "shutil", "signal", "socket",
+        "filecmp", "fnmatch", "functools", "getpass", "glob", "hashlib", "heapq", "hmac",
+        "importlib", "io", "itertools", "json", "logging", "math", "os", "pathlib", "pickle", "platform",
+        "pprint", "py_compile", "queue", "random", "re", "shlex", "shutil", "signal", "socket",
         "sqlite3", "ssl", "stat", "string", "subprocess", "sys", "tempfile", "textwrap",
         "threading", "time", "traceback", "typing", "unicodedata", "urllib", "uuid",
         "warnings", "weakref", "xml", "zipfile", "zlib", "email", "http", "copy",
