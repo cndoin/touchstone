@@ -1,0 +1,365 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Touchstone: An Anti-Hallucination Engineering Kit for AI Agents"
+abstract: >-
+  A zero-dependency, MIT-licensed toolkit that turns anti-hallucination guidance
+  from prose instructions into executable gates. It combines claim-level
+  provenance enforcement, context-isolated verification, hard checks for
+  decidable items (URL/DOI/file/command/package), a project decision ledger with
+  drift detection, dependency hallucination and slopsquatting defense, and
+  uncertainty routing — implemented as plain Python scripts using only the
+  standard library, with adapters for Claude Code, DeepSeek and generic agent
+  harnesses.
+authors:
+  - name: "Touchstone contributors"
+    alias: "cndoin"
+    website: "https://github.com/cndoin"
+license: MIT
+version: 4.0.0
+date-released: "2026-09-17"
+repository-code: "https://github.com/cndoin/touchstone"
+url: "https://github.com/cndoin/touchstone"
+keywords:
+  - hallucination
+  - LLM
+  - factuality
+  - faithfulness
+  - verification
+  - AI agents
+  - RAG
+  - slopsquatting
+  - uncertainty
+  - provenance
+preferred-citation:
+  type: software
+  title: "Touchstone: An Anti-Hallucination Engineering Kit for AI Agents"
+  authors:
+    - name: "Touchstone contributors"
+      alias: "cndoin"
+      website: "https://github.com/cndoin"
+  year: 2026
+  version: 4.0.0
+  license: MIT
+
+# ---------------------------------------------------------------------------
+# 本套件融合的方法来自以下工作。使用本套件时，请一并引用对应的原始论文
+# （这是学术规范，也是本套件 ATTRIBUTIONS.md 的要求）。
+#
+# 核验说明（2026-09-17）：下列条目的标题与作者列表均于 2026-09-17 逐个比对
+# arXiv 摘要页原文后录入，未凭记忆填写。标题一律采用 arXiv 官方全称。
+# 引用具体数值前请回溯原文，并注意其限定域（数据集 / 模型 / 场景）。
+# ---------------------------------------------------------------------------
+references:
+  - type: article
+    title: "Chain-of-Verification Reduces Hallucination in Large Language Models"
+    year: 2023
+    arXiv: "2309.11495"
+    authors:
+      - family-names: "Dhuliawala"
+        given-names: "Shehzaad"
+      - family-names: "Komeili"
+        given-names: "Mojtaba"
+      - family-names: "Xu"
+        given-names: "Jing"
+      - family-names: "Raileanu"
+        given-names: "Roberta"
+      - family-names: "Li"
+        given-names: "Xian"
+      - family-names: "Celikyilmaz"
+        given-names: "Asli"
+      - family-names: "Weston"
+        given-names: "Jason"
+    note: "CoVe; factored (context-isolated) verification — 本套件铁律 2 的依据"
+
+  - type: article
+    title: "SelfCheckGPT: Zero-Resource Black-Box Hallucination Detection for Generative Large Language Models"
+    year: 2023
+    arXiv: "2303.08896"
+    authors:
+      - family-names: "Manakul"
+        given-names: "Potsawee"
+      - family-names: "Liusie"
+        given-names: "Adian"
+      - family-names: "Gales"
+        given-names: "Mark J. F."
+    note: "EMNLP 2023 main; 采样一致性作为无外部资源时的兜底"
+
+  - type: article
+    title: "FActScore: Fine-grained Atomic Evaluation of Factual Precision in Long Form Text Generation"
+    year: 2023
+    arXiv: "2305.14251"
+    authors:
+      - family-names: "Min"
+        given-names: "Sewon"
+      - family-names: "Krishna"
+        given-names: "Kalpesh"
+      - family-names: "Lyu"
+        given-names: "Xinxi"
+      - family-names: "Lewis"
+        given-names: "Mike"
+      - family-names: "Yih"
+        given-names: "Wen-tau"
+      - family-names: "Koh"
+        given-names: "Pang Wei"
+      - family-names: "Iyyer"
+        given-names: "Mohit"
+      - family-names: "Zettlemoyer"
+        given-names: "Luke"
+      - family-names: "Hajishirzi"
+        given-names: "Hannaneh"
+    note: "EMNLP 2023 main; 原子化声明拆分的依据"
+
+  - type: article
+    title: "Detecting hallucinations in large language models using semantic entropy"
+    year: 2024
+    authors:
+      - family-names: "Farquhar"
+        given-names: "Sebastian"
+      - family-names: "Kossen"
+        given-names: "Jannik"
+      - family-names: "Kuhn"
+        given-names: "Lorenz"
+      - family-names: "Gal"
+        given-names: "Yarin"
+    journal: "Nature"
+    volume: 630
+    start: 625
+    end: 630
+    doi: "10.1038/s41586-024-07421-0"
+
+  - type: article
+    title: "Why Language Models Hallucinate"
+    year: 2025
+    arXiv: "2509.04664"
+    authors:
+      - family-names: "Kalai"
+        given-names: "Adam Tauman"
+      - family-names: "Nachum"
+        given-names: "Ofir"
+      - family-names: "Vempala"
+        given-names: "Santosh S."
+      - family-names: "Zhang"
+        given-names: "Edwin"
+    note: "幻觉 = 二分类错误；主流榜单惩罚弃权，从而奖励猜测"
+
+  - type: article
+    title: "Hallucinations Undermine Trust; Metacognition is a Way Forward"
+    year: 2026
+    arXiv: "2605.01428"
+    authors:
+      - family-names: "Yona"
+        given-names: "Gal"
+      - family-names: "Geva"
+        given-names: "Mor"
+      - family-names: "Matias"
+        given-names: "Yossi"
+    note: "ICML 2026 Position Track; 置信错误 / 忠实不确定性 / utility tax"
+
+  - type: article
+    title: "HalluScan: A Systematic Benchmark for Detecting and Mitigating Hallucinations in Instruction-Following LLMs"
+    year: 2026
+    arXiv: "2605.02443"
+    authors:
+      - family-names: "Cherif"
+        given-names: "Ahmed"
+    note: "HalluScore 与 Adaptive Detection Routing (ADR)。注：二手转述与该摘要存在冲突，引用前请以 arXiv 摘要为准"
+
+  - type: article
+    title: "LLM Ghostbusters: Surgical Hallucination Suppression via Adaptive Unlearning"
+    year: 2026
+    arXiv: "2605.01047"
+    authors:
+      - family-names: "Spracklen"
+        given-names: "Joseph"
+      - family-names: "Aghazadeh"
+        given-names: "Pedram"
+      - family-names: "Koushanfar"
+        given-names: "Farinaz"
+      - family-names: "Jadliwala"
+        given-names: "Murtuza"
+    note: "代码生成中的包幻觉与 slopsquatting 攻击面"
+
+  - type: article
+    title: "Logical Consistency as a Bridge: Improving LLM Hallucination Detection via Label Constraint Modeling between Responses and Self-Judgments"
+    year: 2026
+    arXiv: "2605.03971"
+    authors:
+      - family-names: "Mi"
+        given-names: "Hao"
+      - family-names: "Sheng"
+        given-names: "Qiang"
+      - family-names: "Wang"
+        given-names: "Shaofei"
+      - family-names: "Hu"
+        given-names: "Beizhe"
+      - family-names: "Sun"
+        given-names: "Yifan"
+      - family-names: "Wang"
+        given-names: "Zhengjia"
+      - family-names: "Zeng"
+        given-names: "Hengqi"
+      - family-names: "Li"
+        given-names: "Yang"
+      - family-names: "Wang"
+        given-names: "Danding"
+      - family-names: "Cao"
+        given-names: "Juan"
+    note: "LaaB; ACL 2026 main"
+
+  - type: article
+    title: "BALTO: Balanced Token-Level Policy Optimization for Hallucination Mitigation"
+    year: 2026
+    arXiv: "2606.15893"
+    authors:
+      - family-names: "Li"
+        given-names: "Ning"
+      - family-names: "Guo"
+        given-names: "Zixuan"
+      - family-names: "Xu"
+        given-names: "Yan"
+      - family-names: "Fei"
+        given-names: "Wenbo"
+      - family-names: "Niu"
+        given-names: "Yifan"
+      - family-names: "Luo"
+        given-names: "Chang"
+      - family-names: "Wang"
+        given-names: "Yasheng"
+      - family-names: "Liu"
+        given-names: "Weiwen"
+      - family-names: "Yu"
+        given-names: "Yong"
+      - family-names: "Zhang"
+        given-names: "Weinan"
+
+  - type: article
+    title: "HalluGuard: Demystifying Data-Driven and Reasoning-Driven Hallucinations in LLMs"
+    year: 2026
+    arXiv: "2601.18753"
+    authors:
+      - family-names: "Zeng"
+        given-names: "Xinyue"
+      - family-names: "Lin"
+        given-names: "Junhong"
+      - family-names: "Yan"
+        given-names: "Yujun"
+      - family-names: "Guo"
+        given-names: "Feng"
+      - family-names: "Shi"
+        given-names: "Liang"
+      - family-names: "Wu"
+        given-names: "Jun"
+      - family-names: "Zhou"
+        given-names: "Dawei"
+    note: "ICLR 2026"
+
+  - type: article
+    title: "Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States"
+    year: 2026
+    arXiv: "2607.11414"
+    authors:
+      - family-names: "Wang"
+        given-names: "Richard Zhe"
+    note: "自一致性天花板：在 FinQA 上，8/8 采样一致的答案里仍有 15-23% 是错的（Qwen3-8B / Llama-3.1-8B / Gemma-2-9B）。限定域：金融 QA，请勿外推为通用结论"
+
+  - type: article
+    title: "When Small Models Are Right for Wrong Reasons: Process Verification for Trustworthy Agents"
+    year: 2026
+    arXiv: "2601.00513"
+    authors:
+      - family-names: "Advani"
+        given-names: "Laksh"
+    note: "7-9B 模型 50-69% 的正确答案推理链本身有错；self-critique 有害 (d=-0.14~-0.33)、RAG 有益 (d=0.23~0.93)。AAAI 2026 TrustAgent workshop"
+
+  - type: article
+    title: "Hallucination Detection in Large Language Models Using Diversion Decoding"
+    year: 2026
+    arXiv: "2607.10476"
+    authors:
+      - family-names: "Abdeen"
+        given-names: "Basel"
+      - family-names: "Siddiqui"
+        given-names: "S M Tahmid"
+      - family-names: "Ahmed"
+        given-names: "Meah Tahmeed"
+      - family-names: "Singhal"
+        given-names: "Anoop"
+      - family-names: "Khan"
+        given-names: "Latifur"
+      - family-names: "Modi"
+        given-names: "Punya Parag"
+      - family-names: "Al-Shaer"
+        given-names: "Ehab"
+    note: "DBSec 2025; 比纯采样更省算力的检测手段"
+
+  - type: article
+    title: "Sycophantic Chatbots Cause Delusional Spiraling, Even in Ideal Bayesians"
+    year: 2026
+    arXiv: "2602.19141"
+    authors:
+      - family-names: "Chandra"
+        given-names: "Kartik"
+      - family-names: "Kleiman-Weiner"
+        given-names: "Max"
+      - family-names: "Ragan-Kelley"
+        given-names: "Jonathan"
+      - family-names: "Tenenbaum"
+        given-names: "Joshua B."
+    note: "谄媚诱导型幻觉：即使理想贝叶斯用户也会中招，且两种缓解均失效 —— 本套件铁律 9 的依据"
+
+  - type: article
+    title: "RefChecker: Reference-based Fine-grained Hallucination Checker and Benchmark for Large Language Models"
+    year: 2024
+    arXiv: "2405.14486"
+    authors:
+      - family-names: "Hu"
+        given-names: "Xiangkun"
+      - family-names: "Ru"
+        given-names: "Dongyu"
+      - family-names: "Qiu"
+        given-names: "Lin"
+      - family-names: "Guo"
+        given-names: "Qipeng"
+      - family-names: "Zhang"
+        given-names: "Tianhang"
+      - family-names: "Xu"
+        given-names: "Yang"
+      - family-names: "Luo"
+        given-names: "Yun"
+      - family-names: "Liu"
+        given-names: "Pengfei"
+      - family-names: "Zhang"
+        given-names: "Yue"
+      - family-names: "Zhang"
+        given-names: "Zheng"
+    note: "Zero/Noisy/Accurate 上下文设定 + 三元组粒度 —— 本套件 M1 的来源（Apache-2.0，仅借鉴方法）"
+
+  - type: article
+    title: "OpenFactCheck: Building, Benchmarking Customized Fact-Checking Systems and Evaluating the Factuality of Claims and LLMs"
+    year: 2024
+    arXiv: "2405.05583"
+    authors:
+      - family-names: "Wang"
+        given-names: "Yuxia"
+      - family-names: "Wang"
+        given-names: "Minghan"
+      - family-names: "Iqbal"
+        given-names: "Hasan"
+      - family-names: "Georgiev"
+        given-names: "Georgi"
+      - family-names: "Geng"
+        given-names: "Jiahui"
+      - family-names: "Nakov"
+        given-names: "Preslav"
+    note: "COLING 2025"
+
+  - type: article
+    title: "RAG-MCP: Mitigating Prompt Bloat in LLM Tool Selection via Retrieval-Augmented Generation"
+    year: 2025
+    arXiv: "2505.03275"
+    authors:
+      - family-names: "Gan"
+        given-names: "Tiantian"
+      - family-names: "Sun"
+        given-names: "Qiyao"

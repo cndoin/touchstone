@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: MIT
+name: 功能建议
+description: 新的核查能力、新的 hook、新的适配
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > 硬性约束（不满足的建议会被直接关闭，不是针对你）：
+        > **零第三方依赖** —— 只能用 Python 标准库。
+        > **离线可用** —— 断网时必须退化成 UNVERIFIED，而不是崩溃。
+        > **可验证** —— 说不清"怎么证明它有用"的能力不收。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决什么幻觉
+      description: |
+        请描述一个**真实发生过**的场景：AI 具体说了什么错话，
+        现有六层机制（见 SKILL.md「核心机制」）为什么没能拦住。
+      placeholder: |
+        场景：...
+        AI 说：...
+        实际上：...
+        现有一层没拦住，因为：...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的做法
+    validations:
+      required: true
+
+  - type: textarea
+    id: verify
+    attributes:
+      label: 怎么验证它有效
+      description: |
+        关键问题：**怎么证明它能拦住、且不误伤？**
+        给出可做成回归用例的输入，或可测量的指标。
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: 落在哪一层
+      options:
+        - L1 硬核查（事实可查证）
+        - L2 软核查（一致性 / 自洽）
+        - L3 执行声明核查
+        - L4 供应链核查
+        - L5 大项目账本 / 漂移
+        - L6 交付闸门 / 报告
+        - 不确定
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cost
+    attributes:
+      label: 成本
+      description: 参考 `references/06-cost-routing.md`
+      options:
+        - 零成本（纯本地文本匹配）
+        - 低（少量额外文件读取）
+        - 中（需要额外一次模型调用）
+        - 高（需要联网 / 多次调用）
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: 约束确认
+      options:
+        - label: 不需要引入第三方依赖
+        - label: 断网时能优雅退化（UNVERIFIED），不会崩溃
+        - label: 我愿意提交 PR（含测试）

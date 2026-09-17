@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题（请勿公开）
+    url: https://github.com/cndoin/touchstone/security/advisories/new
+    about: hook 被绕过、缓存投毒、路径穿越、命令注入等，走私有 Security Advisory
+  - name: 用法咨询 / 集成问题
+    url: https://github.com/cndoin/touchstone/discussions
+    about: 怎么用、怎么接 Claude Code / 其他 harness，先来 Discussions

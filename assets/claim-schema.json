@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/cndoin/touchstone/main/assets/claim-schema.json",
+  "title": "Touchstone Output Contract v2",
+  "description": "反幻觉工程套件的输出契约。融合 FacTool（声明级/回答级事实性 + 硬核查留痕）、RefChecker（上下文设定 + 三元组粒度）、verify-gate（五标签 + 先证伪 + 90 天过期）、Cleanlab TLM（反例解释）、微软 refchecker（窄面硬核查）。",
+  "type": "object",
+  "required": ["context_setting", "risk_level", "answer", "claims"],
+  "properties": {
+    "context_setting": {
+      "type": "string",
+      "enum": ["accurate", "noisy", "zero", "accurate_context", "noisy_context", "zero_context"],
+      "description": "accurate=有唯一权威原文（只对照它）；noisy=RAG/多文档质量参差（过滤噪声+交叉）；zero=开放问答无资料（必须外部检索）"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["L0", "L1", "L2"],
+      "description": "L0=闲聊创意；L1=业务咨询/写代码/写报告；L2=法律医疗金融/对外发布/不可逆操作"
+    },
+    "retrieval_performed": {
+      "type": "boolean",
+      "description": "是否执行过外部检索。zero_context 与 L2 场景应为 true。"
+    },
+    "answer": {
+      "type": "string",
+      "description": "最终答案正文。无源声明必须已删除或已降格标注。"
+    },
+    "claims": {
+      "type": "array",
+      "description": "原子化后的声明列表，每条独立可验证。",
+      "items": { "$ref": "#/definitions/claim" }
+    },
+    "hard_checks": {
+      "type": "object",
+      "description": "可判定项的核查结果，格式统一为 '通过数/总数'。未全过的项对应声明必须删除或降级。",
+      "properties": {
+        "urls_resolved": { "type": ["string", "null"] },
+        "dois_resolved": { "type": ["string", "null"] },
+        "references_verified": { "type": ["string", "null"] },
+        "entities_exist": { "type": ["string", "null"] },
+        "apis_exist": { "type": ["string", "null"] },
+        "files_exist": { "type": ["string", "null"] },
+        "commands_executed": { "type": ["string", "null"] },
+        "versions_verified": { "type": ["string", "null"] },
+        "summary": { "type": "object", "description": "hardcheck.py 的汇总：total/pass/fail/unverified" },
+        "removed": {
+          "type": "array",
+          "description": "因核查失败被删除的条目，留痕用。",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "unverified": {
+      "type": "array",
+      "description": "查不到支撑、已被删除或降格的声明文本。用于留痕。",
+      "items": { "type": "string" }
+    },
+    "execution_claims": {
+      "type": "array",
+      "description": "执行类声明（'文件已创建'、'测试通过'、'已发送'）必须与事实声明同闸验证。",
+      "items": {
+        "type": "object",
+        "required": ["claim", "verified"],
+        "properties": {
+          "claim": { "type": "string" },
+          "evidence": {
+            "type": "string",
+            "description": "工具实际输出的原文。'应该过了'、'很有把握' 不属于证据。"
+          },
+          "verified": { "type": "boolean" }
+        }
+      }
+    },
+    "needs_human_review": {
+      "type": "boolean",
+      "description": "L2 场景或存在低置信关键声明时置 true。"
+    },
+    "checked_at": {
+      "type": "string",
+      "description": "核查日期。超过 90 天的已验证知识需重新验证。",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "metrics": {
+      "type": "object",
+      "description": "本次产出的事实性指标，长期跟踪用（见 references/10-metrics-regression.md）。",
+      "properties": {
+        "claims_total": { "type": "integer" },
+        "claims_with_sources": { "type": "integer" },
+        "abstained": { "type": "integer" },
+        "unsupported_claim_rate": { "type": "number" }
+      }
+    }
+  },
+  "definitions": {
+    "claim": {
+      "type": "object",
+      "required": ["text", "label"],
+      "properties": {
+        "id": { "type": ["integer", "null"] },
+        "text": { "type": "string", "description": "单条原子声明，只包含一个可验证事实。" },
+        "type": {
+          "type": "string",
+          "enum": ["fact", "inference", "opinion"],
+          "description": "只有 fact 走事实核查；inference/opinion 单独标注，不混入。"
+        },
+        "triple": {
+          "type": ["object", "null"],
+          "description": "结构化主张用三元组表示（RefChecker 粒度）。",
+          "properties": {
+            "s": { "type": "string", "description": "subject 主体" },
+            "r": { "type": "string", "description": "relation 关系" },
+            "o": { "type": "string", "description": "object 客体" }
+          }
+        },
+        "label": {
+          "type": "string",
+          "enum": ["confirmed", "observed", "assumed", "hearsay", "unknown"],
+          "description": "confirmed=过闸(先证伪+≥2独立一手源)；observed=单次直接观测；assumed=未验证推断；hearsay=转述未见一手；unknown=无依据"
+        },
+        "sources": {
+          "type": "array",
+          "description": "confirmed 至少 2 个独立一手源。博客引博客只算 1 个。",
+          "items": {
+            "type": "object",
+            "required": ["type", "ref"],
+            "properties": {
+              "type": { "type": "string", "enum": ["doc", "url", "tool", "code", "command", "person", "observation"] },
+              "ref": { "type": "string", "description": "文档名+章节 / URL / 命令 / 人名" },
+              "quote": { "type": "string", "description": "原文逐字引文" },
+              "independent": {
+                "type": "boolean",
+                "description": "是否为独立一手源（非转述）。confirmed 判定依据。"
+              }
+            }
+          }
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "高 0.85-1.0 / 中 0.6-0.85 / 低 0.3-0.6 / 无 0-0.3"
+        },
+        "counter_evidence_checked": {
+          "type": "boolean",
+          "description": "是否主动找过反证。升级为 confirmed 前必须为 true。"
+        },
+        "alternative": {
+          "type": ["string", "null"],
+          "description": "反例解释：另一个合理答案是什么 / 反证方向是什么。非 confirmed 必填。"
+        },
+        "sample_size": {
+          "type": ["string", "integer", "null"],
+          "description": "样本量。n=1 是轶事，只能标 observed 不能标 confirmed。"
+        },
+        "scope_limits": {
+          "type": "string",
+          "description": "边界：这条在哪不成立。"
+        },
+        "verified_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "label": { "const": "confirmed" } },
+            "required": ["label"]
+          },
+          "then": {
+            "properties": {
+              "counter_evidence_checked": { "const": true }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

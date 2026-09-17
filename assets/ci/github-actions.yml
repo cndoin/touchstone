@@ -1,0 +1,80 @@
+name: touchstone-gate
+
+# 反幻觉闸门：任何 AI 产出进入主干前过一遍。
+# 退出码：0=通过  1=BLOCKED（不许合并）  2=有未验证项  3=用法错误
+# 纯标准库 Python，无需安装依赖；--offline 保证无网环境也能跑。
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 硬核查（URL / DOI / 文件 / 命令 / 包版本）
+        # 离线跑本地可判定项；需要联网核查时去掉 --offline 并把 URL/DOI 写进 checks.json
+        run: |
+          python skills/touchstone/scripts/hardcheck.py \
+            --batch .touchstone/checks.json --offline \
+            --json-out hardcheck.json
+        continue-on-error: true
+
+      - name: 依赖与符号幻觉防护（幻影 import / 包幻觉 / slopsquatting）
+        run: |
+          python skills/touchstone/scripts/dep_guard.py \
+            --root . --json --report dep-guard.json
+        # 本步会联网查 registry；无网环境加 --offline（外部包会记为 UNVERIFIED）
+        continue-on-error: true
+
+      - name: 输出契约闸门
+        run: |
+          python skills/touchstone/scripts/claim_lint.py \
+            --input .touchstone/claims.json --min-level L1 --json
+
+      - name: 一键汇总（可选）
+        if: always()
+        run: |
+          python skills/touchstone/scripts/pipeline.py \
+            --root . --checks .touchstone/checks.json \
+            --claims .touchstone/claims.json --offline \
+            --json --report gate-report.json || true
+
+      - name: 上传报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: touchstone-report
+          path: |
+            hardcheck.json
+            dep-guard.json
+            gate-report.json
+
+  # 深度健壮性测试较慢（几十秒，含并发与性能用例），建议 nightly 或手动触发，
+  # 不必每次 PR 都跑。快速冒烟用 selftest.py（秒级，可放 PR）。
+  robustness:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 快速冒烟（38 条）
+        run: python skills/touchstone/scripts/selftest.py
+      - name: 深度健壮性（70 条）
+        run: python skills/touchstone/scripts/robustness_test.py --json
+      # 工程一致性会拿工作区和安装目录比对，CI 里没有安装目录 → 跳过该组
+      - name: 工程一致性（99 条）
+        run: python skills/touchstone/scripts/stability_test.py --json --no-install-check
+
+# 说明：
+# - 需要严格门禁时，去掉 continue-on-error，任何一步非零即失败。
+# - 退出码 2（未验证）建议配成警告而不是失败：网络抖动不该误伤合并，但必须可追溯。

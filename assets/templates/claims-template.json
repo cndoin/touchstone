@@ -1,0 +1,42 @@
+{
+  "context_setting": "noisy_context",
+  "risk_level": "L1",
+  "retrieval_performed": false,
+  "answer": "",
+  "claims": [
+    {
+      "id": 1,
+      "text": "",
+      "type": "fact",
+      "triple": { "s": "", "r": "", "o": "" },
+      "label": "assumed",
+      "sources": [
+        { "type": "doc", "ref": "", "quote": "", "independent": true }
+      ],
+      "confidence": 0.5,
+      "counter_evidence_checked": false,
+      "alternative": "另一个合理答案是 X",
+      "sample_size": null,
+      "scope_limits": "仅在 ... 条件下成立",
+      "verified_at": "2026-09-16"
+    }
+  ],
+  "hard_checks": {
+    "urls_resolved": "0/0",
+    "dois_resolved": "n/a",
+    "files_exist": "0/0",
+    "commands_executed": "0/0"
+  },
+  "unverified": [],
+  "execution_claims": [
+    { "claim": "", "evidence": "", "verified": false }
+  ],
+  "needs_human_review": false,
+  "checked_at": "2026-09-16",
+  "metrics": {
+    "claims_total": 0,
+    "claims_with_sources": 0,
+    "abstained": 0,
+    "unsupported_claim_rate": 0.0
+  }
+}

@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: MIT
+name: 缺陷报告
+description: 脚本崩了、闸门误放行 / 误报、行为与文档不符
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > 这个仓库本身就是反幻觉工具，所以报告请**只写你实际观察到的事实**。
+        > "好像""应该是"这类描述我们没法复现，也没法修。
+        >
+        > **安全问题请不要开公开 issue**，走 GitHub Security Advisory（见 `SECURITY.md`）。
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: "cat VERSION 的输出，或 SKILL.md frontmatter 里的 version"
+      placeholder: "3.4.1"
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: 运行环境
+      description: Python 版本 + 操作系统
+      placeholder: "Python 3.11.4 · Windows 11 / Ubuntu 22.04 / macOS 14"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: script
+    attributes:
+      label: 涉及脚本
+      options:
+        - hardcheck.py
+        - dep_guard.py
+        - claim_lint.py
+        - ledger.py
+        - pipeline.py
+        - selfcheck.py
+        - regression.py
+        - model_profile.py
+        - selftest.py
+        - robustness_test.py
+        - stability_test.py
+        - audit.py
+        - verifiers.py / _common.py
+        - adapters/claude-code/hooks/*.py
+        - 其他 / 不确定
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 给出可直接复制运行的命令。有最小输入文件请一并贴出。
+      placeholder: |
+        1. ...
+        2. python scripts/xxx.py --xxx ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: |
+        请贴完整输出。有 Traceback 就贴完整 Traceback。
+        退出码（`echo $?` / `echo %ERRORLEVEL%`）很重要，请一并给出。
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 严重度
+      description: 参考 `SECURITY.md` —— 误放行的严重度高于误报
+      options:
+        - 误放行（本该拦住却通过 = 最严重）
+        - 崩溃 / Traceback
+        - 误报（本该通过却拦住）
+        - 输出错误但退出码正确
+        - 轻微 / 体验问题
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我跑过 `python scripts/selftest.py`，且已附上结果
+        - label: 贴出的内容已脱敏（无真实项目路径 / 密钥 / 客户名）
+        - label: 这不是安全问题（安全问题请走 Security Advisory）

@@ -1,0 +1,53 @@
+{
+  "version": 2,
+  "project": "示例项目（Moss Android App 风格）",
+  "updated_at": "2026-09-16",
+  "note": "账本不是免检证：用 ledger.py check 定期比对真实现状；drift 条目不得再作为 confirmed 引用。",
+  "entries": [
+    {
+      "id": 1,
+      "kind": "decision",
+      "subject": "DI 框架",
+      "value": "Hilt",
+      "source": "docs/arch.md#3",
+      "status": "confirmed",
+      "scope_limits": "仅主 app 模块；示例模块不受约束",
+      "verify": { "type": "file_contains", "path": "app/build.gradle.kts", "pattern": "hilt" },
+      "created_at": "2026-09-16",
+      "verified_at": "2026-09-16"
+    },
+    {
+      "id": 2,
+      "kind": "constraint",
+      "subject": "编译目标",
+      "value": "compileSdk 35 / targetSdk 35",
+      "source": "gradle/libs.versions.toml",
+      "status": "confirmed",
+      "verify": { "type": "file_contains", "path": "gradle/libs.versions.toml", "pattern": "35" },
+      "created_at": "2026-09-16",
+      "verified_at": "2026-09-16"
+    },
+    {
+      "id": 3,
+      "kind": "state",
+      "subject": "Chat 模块",
+      "value": "已完成（SSE 流式 + Markdown 渲染）",
+      "source": "人工确认 + 测试用例通过",
+      "status": "observed",
+      "scope_limits": "不含多模态图片输入（未开始）",
+      "created_at": "2026-09-16",
+      "verified_at": "2026-09-16"
+    },
+    {
+      "id": 4,
+      "kind": "fact",
+      "subject": "本机编译环境",
+      "value": "无 Docker，WSL 被安全策略拦截；需 Linux 工具链的编译必须走 CI 或外部机器",
+      "source": "本机实测",
+      "status": "confirmed",
+      "scope_limits": "仅当前开发机",
+      "created_at": "2026-09-16",
+      "verified_at": "2026-09-16"
+    }
+  ]
+}

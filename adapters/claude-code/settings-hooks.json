@@ -1,0 +1,78 @@
+{
+  "_comment": "Claude Code hooks 配置示例（v3）。合并进 .claude/settings.json（项目级）或 ~/.claude/settings.json（用户级）。字段名与事件名随版本演进，以官方文档 code.claude.com/docs 为准；配置后请手动触发一次验证。",
+  "_usage": {
+    "project": "复制到 <项目根>/.claude/settings.json",
+    "user": "合并进 ~/.claude/settings.json（对所有项目生效）",
+    "paths": "把下面的路径换成你本机 skill 的实际安装路径"
+  },
+  "_official_semantics": {
+    "exit_0": "放行",
+    "exit_2": "阻断：PreToolUse 阻止工具调用；Stop / SubagentStop 强制继续回合；stderr 回喂模型",
+    "other_nonzero": "非阻断错误（只显示，不阻止）",
+    "post_tool_use": "exit 2 不能撤销已执行的工具，只能回喂反馈",
+    "stop_hook_limit": "Stop hook 连续阻断 8 次后 Claude Code 会覆盖 hook 强制结束回合 —— verify_gate.py 已内置计数上限与 additionalContext 降级来规避",
+    "additional_context": "Stop / SubagentStop 可返回 hookSpecificOutput.additionalContext，继续回合但不计为阻断错误（不消耗 8 次额度）"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/skills/touchstone/adapters/claude-code/hooks/verify_gate.py",
+            "_effect": "本次有“已完成/已创建/测试通过”类声明但缺证据时要求补证据；内置 6 次上限 + additionalContext 降级，不会把用户卡死"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/skills/touchstone/adapters/claude-code/hooks/subagent_gate.py",
+            "_effect": "子 agent 报告含“已完成/已验证”但无命令输出/路径/工具返回值时，拦截要求补证据（子 agent 自述不是证据）"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/skills/touchstone/adapters/claude-code/hooks/precompact_snapshot.py",
+            "_effect": "压缩前把账本/执行声明/git 状态写入 .touchstone/snapshots/，压缩后可读回，防记忆漂移"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/skills/touchstone/adapters/claude-code/hooks/guard_bash.py",
+            "_effect": "拦截 rm -rf /、git push --force、DROP TABLE、下载即执行等不可逆操作"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,os,json;d=json.load(sys.stdin);p=(d.get('tool_input') or {}).get('file_path','');sys.exit(0 if (not p or os.path.exists(p)) else 2)\"",
+            "_effect": "写文件后确认文件真的落盘（该事件的 exit 2 不可撤销动作，仅回喂反馈）"
+          }
+        ]
+      }
+    ]
+  }
+}

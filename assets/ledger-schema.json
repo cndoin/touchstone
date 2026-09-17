@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/cndoin/touchstone/main/assets/ledger-schema.json",
+  "title": "Touchstone Project Ledger v2",
+  "description": "项目账本：把架构决策、契约、约定、状态落到磁盘，防止大项目里的记忆漂移。账本不是免检证——用 ledger.py check 定期比对真实现状。",
+  "type": "object",
+  "required": ["version", "entries"],
+  "properties": {
+    "version": { "type": "integer" },
+    "project": { "type": "string" },
+    "updated_at": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/entry" }
+    }
+  },
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "required": ["id", "kind", "subject", "value"],
+      "properties": {
+        "id": { "type": "integer" },
+        "kind": {
+          "enum": ["decision", "contract", "convention", "state", "constraint", "fact"],
+          "description": "decision=架构选型；contract=接口/数据契约；convention=命名与风格；state=模块完成状态；constraint=硬约束；fact=项目事实"
+        },
+        "subject": { "type": "string", "description": "条目主题，例如：DI 框架" },
+        "value": { "type": "string", "description": "条目取值，例如：Hilt" },
+        "source": { "type": "string", "description": "来源：文档路径#章节 / URL / 命令 / 会议结论" },
+        "status": {
+          "enum": ["confirmed", "observed", "assumed", "stale", "unknown"],
+          "description": "stale = 与现实不一致，不得再作为 confirmed 引用"
+        },
+        "scope_limits": { "type": "string", "description": "边界：该条目在哪不适用" },
+        "verify": { "$ref": "#/definitions/verify" },
+        "created_at": { "type": "string" },
+        "verified_at": { "type": "string" },
+        "drift_detected_at": { "type": "string" }
+      }
+    },
+    "verify": {
+      "type": "object",
+      "description": "机器可验证条件：ledger.py check 会实际读文件/跑命令去比对。",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["file_exists", "file_contains", "dir_exists", "command"]
+        },
+        "path": { "type": "string", "description": "相对项目根目录的路径" },
+        "pattern": { "type": "string", "description": "file_contains 用的正则（忽略大小写）" },
+        "cmd": { "type": "string", "description": "command 类型：exit code 0 视为满足" }
+      }
+    }
+  }
+}

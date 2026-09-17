@@ -1,0 +1,13 @@
+{
+  "note": "hardcheck.py 批量检查配置模板。把本次产出里所有可判定项列出来，一次性跑完。网络失败记为 unverified，不是通过。",
+  "urls": [],
+  "dois": [],
+  "files": [],
+  "commands": [],
+  "pypi": [
+    { "name": "requests", "version": "2.30.0" }
+  ],
+  "npm": [
+    { "name": "react", "version": "18.3.1" }
+  ]
+}

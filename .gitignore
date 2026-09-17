@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 本套件运行时产生的数据（账本 / 快照 / 缓存，可含项目隐私，不入库）
+# v4 起为 .touchstone/；v3 及更早是 .dehallucination/，老项目可自行迁移
+.touchstone/
+.dehallucination/
+
+# 缓存与临时报告
+hardcheck.json
+dep-guard.json
+gate-report.json
+*.tmp
+
+# 本地调试产物：把 stdout 重定向出来的临时文件、一次性脚本
+# 只匹配仓库根目录，不影响 scripts/_common.py 这类正常文件
+/_*
+/.*_tmp.py
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,57 @@
+{
+  "context_setting": "zero_context",
+  "risk_level": "L2",
+  "answer": "此文件是**故意做错**的示例，用于演示 claim_lint.py 会拦住什么。跑它应当返回退出码 1（闸门不放行）。",
+  "claims": [
+    {
+      "id": 1,
+      "text": "只有单一来源却标了 confirmed，而且没找过反证",
+      "label": "confirmed",
+      "sources": [
+        { "type": "doc", "ref": "某篇博客", "quote": "听说……" }
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": 2,
+      "text": "标了 observed 却没写观测时间",
+      "label": "observed",
+      "sources": [],
+      "confidence": 0.8
+    },
+    {
+      "id": 3,
+      "text": "低置信且没附反例解释",
+      "label": "assumed",
+      "sources": [],
+      "confidence": 0.4
+    },
+    {
+      "id": 4,
+      "text": "标了 confirmed 却置信度只有 0.3（自相矛盾）",
+      "label": "confirmed",
+      "sources": [
+        { "type": "url", "ref": "https://a.example.com" },
+        { "type": "url", "ref": "https://b.example.com" }
+      ],
+      "confidence": 0.3,
+      "counter_evidence_checked": true
+    },
+    {
+      "id": 5,
+      "text": "标签拼错了",
+      "label": "verified",
+      "sources": []
+    }
+  ],
+  "hard_checks": {
+    "urls_resolved": "1/3",
+    "files_exist": "0/2"
+  },
+  "execution_claims": [
+    { "claim": "测试已通过", "verified": true },
+    { "claim": "文件已创建", "verified": false }
+  ],
+  "needs_human_review": false,
+  "checked_at": "2026-09-16"
+}

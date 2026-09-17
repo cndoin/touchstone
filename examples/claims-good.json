@@ -1,0 +1,68 @@
+{
+  "context_setting": "accurate_context",
+  "risk_level": "L1",
+  "retrieval_performed": false,
+  "answer": "本 skill 的脚本目录包含 5 个可执行脚本，全部为纯标准库 Python（见 scripts/ 目录实际文件）。",
+  "claims": [
+    {
+      "id": 1,
+      "text": "scripts/ 目录下包含 hardcheck.py",
+      "type": "fact",
+      "label": "confirmed",
+      "sources": [
+        { "type": "code", "ref": "scripts/hardcheck.py", "quote": "def main(argv=None):", "independent": true },
+        { "type": "command", "ref": "python hardcheck.py --help", "quote": "usage: hardcheck.py", "independent": true }
+      ],
+      "confidence": 0.95,
+      "counter_evidence_checked": true,
+      "alternative": null,
+      "scope_limits": "指本 skill 包内的 scripts 目录",
+      "verified_at": "2026-09-16"
+    },
+    {
+      "id": 2,
+      "text": "scripts/ 目录下包含 claim_lint.py、ledger.py、selfcheck.py、regression.py",
+      "type": "fact",
+      "label": "observed",
+      "sources": [
+        { "type": "code", "ref": "scripts/", "quote": "ls scripts/", "independent": true }
+      ],
+      "confidence": 0.9,
+      "counter_evidence_checked": false,
+      "alternative": null,
+      "verified_at": "2026-09-16"
+    },
+    {
+      "id": 3,
+      "text": "这套闸门能把含幻觉输出降低一个量级",
+      "type": "inference",
+      "label": "assumed",
+      "sources": [],
+      "confidence": 0.45,
+      "counter_evidence_checked": false,
+      "alternative": "未做 A/B 实测前，无法证明降幅；参照工程数据（9% → 2.2%）属二手转述，需回溯一手",
+      "scope_limits": "未做本地 A/B 统计，不能当结论用",
+      "verified_at": "2026-09-16"
+    }
+  ],
+  "hard_checks": {
+    "files_exist": "5/5",
+    "commands_executed": "1/1"
+  },
+  "unverified": [],
+  "execution_claims": [
+    {
+      "claim": "已编写并跑通 hardcheck.py",
+      "evidence": "[PASS] file SKILL.md :: 文件存在，10624 bytes",
+      "verified": true
+    }
+  ],
+  "needs_human_review": false,
+  "checked_at": "2026-09-16",
+  "metrics": {
+    "claims_total": 3,
+    "claims_with_sources": 2,
+    "abstained": 0,
+    "unsupported_claim_rate": 0.33
+  }
+}

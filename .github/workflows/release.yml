@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: MIT
+# 发版工作流 —— 打 tag 即发版
+#
+# 唯一的事实来源是仓库里的 VERSION 文件：tag 必须与它一致，否则直接失败。
+# 目的：杜绝"tag 写 v3.5.0 但 VERSION 还是 3.4.1"这种版本漂移。
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的 tag，形如 v3.4.1"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 校验 tag 与 VERSION 一致
+        run: |
+          set -euo pipefail
+          VER="$(tr -d '[:space:]' < VERSION)"
+          if [ -n "${GITHUB_REF:-}" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+          echo "tag = $TAG / VERSION = $VER"
+          if [ "$TAG" != "v$VER" ]; then
+            echo "::error::tag($TAG) 与 VERSION($VER) 不一致，应为 v$VER"
+            echo "::error::请先更新 VERSION / SKILL.md / i18n/en/SKILL.md / CHANGELOG.md / CITATION.cff，再打 tag"
+            exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: 发版前全量测试
+        run: |
+          set -euo pipefail
+          python scripts/selftest.py
+          python scripts/robustness_test.py
+          python scripts/stability_test.py --no-install-check
+          python scripts/audit.py --strict
+
+      - name: 打包（不含 .git / .github）
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          git archive --format=zip --prefix="touchstone-${TAG}/" \
+            -o "dist/touchstone-${TAG}.zip" HEAD
+          ls -l dist
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "touchstone ${TAG}"
+          files: dist/*.zip
+          generate_release_notes: true
+          body: |
+            安装与升级见 `README.md`「安装」一节。
+            校验方式：解包后跑 `python scripts/selftest.py`，应全部通过。

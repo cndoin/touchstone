@@ -1,0 +1,32 @@
+MIT License
+
+Copyright (c) 2026 Touchstone contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+补充说明（非法律条款，仅为使用指引）：
+
+1. 本仓库的提示词、工作流与脚本以 MIT 授权，可自由使用、修改、再发布（含商用）。
+2. 借鉴的方法与项目各自有其许可证，见 ATTRIBUTIONS.md。本仓库只借鉴**方法与思路**，
+   不包含任何第三方源代码。
+3. 文档中引用的论文与 benchmark 数据，请按学术规范署名引用。
+4. 本套件不提供任何正确性担保：它降低幻觉风险，但不消除风险。高风险场景（法律/医疗/
+   金融/不可逆操作）必须保留人工复核。

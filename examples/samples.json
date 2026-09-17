@@ -1,0 +1,9 @@
+{
+  "question": "这个项目的 DI 框架用的是什么？",
+  "samples": [
+    "Hilt",
+    "使用 Hilt 做依赖注入",
+    "Dagger Hilt",
+    "Koin"
+  ]
+}

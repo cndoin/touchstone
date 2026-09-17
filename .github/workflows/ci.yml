@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: MIT
+# touchstone CI —— 自测工作流
+#
+# 设计原则：这个仓库是"反幻觉工具"，CI 本身也不能撒谎。
+#   - 不缓存、不跳过：三条测试套件 + 合规审计全量跑
+#   - 失败即失败：任何一条用例红，整个 job 红，不设 continue-on-error
+#   - 跨平台：Windows 上默认 GBK，必须强制 UTF-8，否则脚本输出会炸
+#
+# 与 assets/ci/github-actions.yml 的区别：
+#   那个是给"使用方"抄的门禁示例（路径 skills/touchstone/...）；
+#   这个是本仓库的自测（路径 scripts/...）。
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # 强制 UTF-8：Windows runner 默认 cp936，脚本里的中文输出会 UnicodeEncodeError
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
+
+jobs:
+  test:
+    name: py${{ matrix.python-version }} · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Python 3.8 是最低支持版本（README 的承诺），必须真的跑
+        # 3.8 只放在 ubuntu-22.04：新版 runner 镜像已不再提供 3.8 构建
+        include:
+          - os: ubuntu-22.04
+            python-version: "3.8"
+          - os: ubuntu-22.04
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          - os: macos-latest
+            python-version: "3.11"
+          - os: windows-latest
+            python-version: "3.11"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 环境信息
+        run: |
+          python -VV
+          python -c "import sys; print('fsencoding =', sys.getfilesystemencoding())"
+
+      # ── 1. 快速冒烟（38 条）
+      - name: selftest.py
+        run: python scripts/selftest.py
+
+      # ── 2. 深度健壮性（70 条）
+      - name: robustness_test.py
+        run: python scripts/robustness_test.py
+
+      # ── 3. 工程一致性（本地 99 条；CI 里 97 条）
+      #     --no-install-check：CI 里没有 ~/.workbuddy 安装副本，
+      #     G 组（安装目录逐字节比对，2 条）整体跳过 → 97 条，不是少跑了两条
+      - name: stability_test.py
+        run: python scripts/stability_test.py --no-install-check
+
+      # ── 4. 开源合规审计（许可证头 / 零第三方依赖 / 隐私 / 版本一致）
+      - name: audit.py
+        run: python scripts/audit.py --strict
+
+  metadata:
+    name: 元数据与资产校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # PyYAML 只用于 CI 校验 CITATION.cff，不进入产品代码
+      # （产品侧"零第三方依赖"是硬约束，由 scripts/audit.py 把关）
+      - name: 安装校验用依赖
+        run: pip install --quiet pyyaml
+
+      - name: 校验 JSON / YAML / CITATION.cff / 文档引用
+        run: python .github/validate-metadata.py
