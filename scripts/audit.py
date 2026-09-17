@@ -217,8 +217,16 @@ def check_docs(rep):
 
 def main(argv=None):
     _utf8()
-    as_json = "--json" in (argv or [])
-    strict = "--strict" in (argv or [])
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if any(a in ("-h", "--help") for a in argv):
+        sys.stdout.write((__doc__ or "touchstone audit") + "\n")
+        return 0
+    unknown = [a for a in argv if a not in ("--json", "--strict")]
+    if unknown:
+        sys.stderr.write("[touchstone] 参数错误：%s\n" % unknown)
+        return 3
+    as_json = "--json" in argv
+    strict = "--strict" in argv
 
     rep = Report()
     try:
