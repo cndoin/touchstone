@@ -23,6 +23,58 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
+# --- guard_bash 拦截/放行语料 -------------------------------------------------
+# 放行侧必须包含「长得像危险命令、其实无害」的输入。只测 `git status` 这种与
+# 危险模式毫无相似度的命令等于没测：历史 bug（rm -rf /tmp/x 误伤、
+# rm -fr ./dist 误伤、git push --force-with-lease 误伤）全部发生在这个空白区。
+#
+# 漏放侧的教训是「同义写法必须同时覆盖」：`rm -rf ~/*` 一开始就拦，
+# 但语义完全一样的 `rm -rf $HOME/*`、`rm -rf ${HOME}/*` 却放行；
+# `rm -rf ~/.*`（清空家目录全部点文件，含 .ssh）同样漏放。
+# 补规则时请按「同一件事的所有写法」而不是「我想到的那种写法」来列用例。
+GUARD_BLOCK = [
+    ("根目录", "rm -rf /"),
+    ("根目录通配", "rm -rf /*"),
+    ("家目录", "rm -rf ~"),
+    ("家目录全部内容", "rm -rf ~/*"),
+    ("家目录点文件", "rm -rf ~/.*"),
+    ("家目录全部内容（变量写法）", "rm -rf $HOME/*"),
+    ("家目录全部内容（花括号写法）", "rm -rf ${HOME}/*"),
+    ("带引号的变量目标", 'rm -rf "$HOME"'),
+    ("当前目录通配", "rm -rf *"),
+    ("当前目录", "rm -rf ."),
+    ("当前目录点文件", "rm -rf ./.*"),
+    ("上级目录", "rm -rf .."),
+    ("上级目录跳级", "rm -fr ../.."),
+    ("上级目录跳级全部内容", "rm -rf ../../*"),
+    ("变量目标（静态不可求值）", "rm -rf $HOME"),
+    ("旗标分开写", "rm -r -f /"),
+    ("长旗标写法", "rm --recursive --force /"),
+    ("强制推送 -f", "git push -f"),
+    ("强制推送 --force", "git push --force origin main"),
+    ("无 WHERE 的删表", 'psql -c "DROP TABLE users"'),
+]
+
+GUARD_ALLOW = [
+    ("临时目录清理", "rm -rf /tmp/build"),
+    ("临时目录全部内容", "rm -rf /tmp/*"),
+    ("家目录子目录清理", "rm -rf ~/cache"),
+    ("家目录点目录清理", "rm -rf ~/.cache"),
+    ("家目录普通子目录", "rm -rf ~/Documents"),
+    # 实测 bash 不对 `~*` 做家目录展开（只 glob 当前目录里以 ~ 开头的文件名），
+    # 它不是家目录，拦了属于误伤
+    ("非家目录展开的波浪号", "rm -rf ~*"),
+    ("相对路径清理（-fr 写法）", "rm -fr ./dist"),
+    ("依赖目录清理", "rm -rf node_modules"),
+    ("通配后缀清理", "rm -rf *.log"),
+    ("上级子目录清理", "rm -rf ../build"),
+    ("变量子目录清理", "rm -rf $HOME/cache"),
+    ("路径中含跳级但目标安全", "rm -rf build/../dist"),
+    ("安全强推（--force-with-lease）", "git push --force-with-lease origin main"),
+    ("push 后接其他命令", "git push; ls -f"),
+    ("普通查询", "git status"),
+]
+
 
 def _utf8():
     for s in (sys.stdout, sys.stderr):
@@ -59,7 +111,8 @@ def main(argv=None):
     if [a for a in argv if a in ("-h", "--help")]:
         print(__doc__ or "touchstone 自检")
         print("\n用法：python scripts/selftest.py [--json]")
-        print("说明：无参数选项，跑完 38 项后按失败数决定退出码。")
+        # 别在这里写死用例条数：加一条用例就会让这行变成假信息
+        print("说明：无参数选项，跑完全部用例后按失败数决定退出码。")
         return 0
     as_json = "--json" in argv
 
@@ -131,10 +184,12 @@ def main(argv=None):
     gb = os.path.join(ROOT, "adapters", "claude-code", "hooks", "guard_bash.py")
     vg = os.path.join(ROOT, "adapters", "claude-code", "hooks", "verify_gate.py")
     if os.path.exists(gb):
-        case("hook guard_bash 拦截高危命令", [gb], 2,
-             stdin_data='{"tool_input":{"command":"rm -rf /"}}')
-        case("hook guard_bash 放行普通命令", [gb], 0,
-             stdin_data='{"tool_input":{"command":"git status"}}')
+        for label, cmd in GUARD_BLOCK:
+            case("hook guard_bash 拦截：%s" % label, [gb], 2,
+                 stdin_data=json.dumps({"tool_input": {"command": cmd}}))
+        for label, cmd in GUARD_ALLOW:
+            case("hook guard_bash 放行：%s" % label, [gb], 0,
+                 stdin_data=json.dumps({"tool_input": {"command": cmd}}))
         case("hook guard_bash 垃圾输入不阻断", [gb], 0, stdin_data="not-json")
     if os.path.exists(vg):
         case("hook verify_gate 无声明文件时放行", [vg], 0,
