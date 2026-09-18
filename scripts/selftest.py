@@ -23,6 +23,37 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
+# --- guard_bash 拦截/放行语料 -------------------------------------------------
+# 放行侧必须包含「长得像危险命令、其实无害」的输入。只测 `git status` 这种与
+# 危险模式毫无相似度的命令等于没测：历史 bug（rm -rf /tmp/x 误伤、
+# rm -fr ./dist 误伤、git push --force-with-lease 误伤、rm -fr ../.. 漏放）
+# 全部发生在这个空白区。新增正则时，请同时补上对应的正反用例。
+GUARD_BLOCK = [
+    ("根目录", "rm -rf /"),
+    ("根目录通配", "rm -rf /*"),
+    ("家目录", "rm -rf ~"),
+    ("当前目录通配", "rm -rf *"),
+    ("当前目录", "rm -rf ."),
+    ("上级目录", "rm -rf .."),
+    ("上级目录跳级", "rm -fr ../.."),
+    ("变量目标（静态不可求值）", "rm -rf $HOME"),
+    ("强制推送 -f", "git push -f"),
+    ("强制推送 --force", "git push --force origin main"),
+    ("无 WHERE 的删表", 'psql -c "DROP TABLE users"'),
+]
+
+GUARD_ALLOW = [
+    ("临时目录清理", "rm -rf /tmp/build"),
+    ("家目录子目录清理", "rm -rf ~/cache"),
+    ("相对路径清理（-fr 写法）", "rm -fr ./dist"),
+    ("依赖目录清理", "rm -rf node_modules"),
+    ("通配后缀清理", "rm -rf *.log"),
+    ("上级子目录清理", "rm -rf ../build"),
+    ("安全强推（--force-with-lease）", "git push --force-with-lease origin main"),
+    ("push 后接其他命令", "git push; ls -f"),
+    ("普通查询", "git status"),
+]
+
 
 def _utf8():
     for s in (sys.stdout, sys.stderr):
@@ -59,7 +90,8 @@ def main(argv=None):
     if [a for a in argv if a in ("-h", "--help")]:
         print(__doc__ or "touchstone 自检")
         print("\n用法：python scripts/selftest.py [--json]")
-        print("说明：无参数选项，跑完 38 项后按失败数决定退出码。")
+        # 别在这里写死用例条数：加一条用例就会让这行变成假信息
+        print("说明：无参数选项，跑完全部用例后按失败数决定退出码。")
         return 0
     as_json = "--json" in argv
 
@@ -131,10 +163,12 @@ def main(argv=None):
     gb = os.path.join(ROOT, "adapters", "claude-code", "hooks", "guard_bash.py")
     vg = os.path.join(ROOT, "adapters", "claude-code", "hooks", "verify_gate.py")
     if os.path.exists(gb):
-        case("hook guard_bash 拦截高危命令", [gb], 2,
-             stdin_data='{"tool_input":{"command":"rm -rf /"}}')
-        case("hook guard_bash 放行普通命令", [gb], 0,
-             stdin_data='{"tool_input":{"command":"git status"}}')
+        for label, cmd in GUARD_BLOCK:
+            case("hook guard_bash 拦截：%s" % label, [gb], 2,
+                 stdin_data=json.dumps({"tool_input": {"command": cmd}}))
+        for label, cmd in GUARD_ALLOW:
+            case("hook guard_bash 放行：%s" % label, [gb], 0,
+                 stdin_data=json.dumps({"tool_input": {"command": cmd}}))
         case("hook guard_bash 垃圾输入不阻断", [gb], 0, stdin_data="not-json")
     if os.path.exists(vg):
         case("hook verify_gate 无声明文件时放行", [vg], 0,
