@@ -1,8 +1,8 @@
 ---
 name: touchstone
-description: Touchstone · anti-hallucination engineering kit (a touchstone is a stone for assaying gold; formerly named dehallucination). Enforces source traceability, context-isolated verification, executable hard gates and calibrated uncertainty when writing reports, researching, citing papers/APIs, calling tools, claiming a task is done, or driving large long-running projects (multi-session, multi-subagent, huge codebases). Use when the user asks "does this really exist", "verify this", "don't make things up", "is this API/paper/file real", "are you sure it's finished", or whenever output will be used as-is in a high-stakes setting.
+description: Touchstone · anti-hallucination engineering kit (a touchstone is a stone for assaying gold; formerly named dehallucination). **Use ONLY when at least one of these holds:** (1) the output must cite externally decidable facts — URLs, DOIs, papers, legal clauses, API signatures, version numbers, package names, file paths, command output; (2) the domain is high-stakes or irreversible — legal, medical, financial, public release, production operations; (3) it is a large long-running project — multi-session, huge codebase, many subagents — where errors compound; (4) the user explicitly asks for verification — "does this really exist", "verify this", "don't make things up", "is this API/paper/file real", "are you sure it's finished"; (5) the output will be adopted without human review, or the user has stated a position and sycophancy is a risk. **Do NOT load this kit for:** chit-chat, creative writing, formatting tweaks, small single-file edits, small local refactors that run locally, explaining code, or one-off quick questions — these have no externally decidable facts, are reversible and internal; just answer directly. Loading the kit only slows things down and burns tokens.
 license: MIT
-version: 4.0.0
+version: 4.1.0
 ---
 
 # Touchstone · Anti-Hallucination Engineering Kit
@@ -25,15 +25,59 @@ What makes v3 different: **every check that a machine can decide is a script**, 
 
 ---
 
-## 0. Three questions at task start
+## Entry gate (answer this FIRST — it decides whether the kit is used at all)
+
+**This kit is not on by default.** It is an expensive heavyweight pipeline (8 steps + isolated
+verification + script gates). Applying it to small tasks only adds latency and burns tokens,
+while buying zero correctness.
+
+### Four-question checklist (any "yes" → engage; all four "no" → do not load, just answer)
+
+| # | Question | What "yes" looks like |
+|---|---|---|
+| **G1** | Is the change confined to **≤1 file**, the answer a **single point**, with no external material needed? | Tweak a config value, adjust CSS, rename a variable, explain a function, small single-file refactor |
+| **G2** | Does it involve **zero externally decidable facts**? (URL · DOI · paper · legal clause · API signature · version · package name · file path · command output) | Creative copy, chit-chat, formatting |
+| **G3** | Is it **reversible**, not entering version history, not conflicting with prior decisions? | Local draft, throwaway script, experimental edit |
+| **G4** | Is it **not published externally**, not entering anyone's decision chain, harmless if wrong? | Internal memo, personal tool, exploratory question |
+
+**All four "yes" → shallow mode: do not read the rest of this kit, answer directly.**
+
+### What still holds in shallow mode (minimum floor, ~zero cost)
+
+Not loading the kit does not mean no floor. These two always apply, because they are **habits**, not **process**:
+
+1. **Never cross the red lines** — do not fabricate URLs / DOIs / papers / legal clauses / APIs / versions / package names / file paths / command output. If you need a citation and aren't sure, say "I need to verify this" — never invent something plausible.
+2. **Downgrade when uncertain** — say "I don't know" when you don't. That is correct behavior, not failure.
+
+### When you MUST escalate to engaging the kit (any hit → engage, however small the task looks)
+
+- Any of G1–G4 is "no"
+- The task is small but the **user explicitly asks for verification**: "does this really exist", "verify this", "don't make things up" (an explicit request = mandatory engagement)
+- The output will be **adopted as-is or published** (even a single sentence)
+- It involves an **irreversible action** (deleting data, changing production config, releasing, external commitments)
+- **The user has stated a position** and you are about to agree (anti-sycophancy, see Iron Rule 9)
+- You catch yourself wanting to say "should be", "generally", "most likely" — that is the signal of "asserting without the right to be confident". Engage.
+
+> When in doubt, engage: engaging costs some tokens, while skipping the gate can push a fabrication into
+> someone's decision. But the **default is not to engage** — most everyday requests are small tasks.
+
+---
+
+## 0. Four questions at task start
 
 ```
+Q0 Model tier?  → scripts/model_profile.py → S/A may self-verify; B/C must use external scripts
 Q1 Context?     Accurate (single authoritative source) / Noisy (RAG, multi-doc) / Zero (no material — must retrieve)
 Q2 Risk?        L0 chat & drafts / L1 business, coding, reports / L2 legal, medical, finance, publishing, irreversible
 Q3 Decidable?   URL / DOI / file / command / version / package → run scripts/hardcheck.py, never rely on memory
 ```
 
 Cannot answer Q1 → treat as **Noisy** (safe default). Cannot answer Q3 → the item is undecidable; do not assert facts about it.
+
+**Q0 decides the play (critical):** strong models (S/A) can be asked to self-verify in isolation;
+weak models (B/C) **cannot self-verify reliably** — they cannot tell whether they were wrong, so asking them to
+"check again" only re-confirms the wrong answer. Weak models must delegate the decision to scripts.
+See `references/16-model-adaptation.md`.
 
 ---
 
@@ -112,7 +156,7 @@ Hallucination in big projects is **cumulative**: a wrong statement on day 3 beco
 
 | Tier | Scope | Investment |
 |---|---|---|
-| L0 | Chat, brainstorming, internal drafts | Baseline rules + red lines |
+| L0 | Chat, brainstorming, internal drafts, small single-file edits | Baseline rules + red lines; **shallow mode — do not load the kit** (see Entry gate) |
 | L1 | Business, coding, research, reports | + hard checks + 8-step workflow |
 | L2 | Legal / medical / finance / publishing / irreversible | + mandatory retrieval + multi-model + human gate |
 
