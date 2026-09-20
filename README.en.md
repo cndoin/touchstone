@@ -26,9 +26,38 @@ A hallucination is not "being wrong". It is **asserting confidently without the 
 
 ---
 
+## When NOT to use it (v4.1 entry gate)
+
+**This kit is not on by default.** It is a heavyweight pipeline (8 steps + isolated verification +
+script gates). Applied to small tasks it only adds latency and burns tokens, buying zero correctness.
+
+**Four-question checklist — any "yes" means engage; all four "yes" means skip the kit:**
+
+| # | Question | What "yes" looks like |
+|---|---|---|
+| **G1** | Is the change confined to **≤1 file**, the answer a single point, with no external material needed? | Tweak a config value, adjust CSS, rename a variable, explain a function, small single-file refactor |
+| **G2** | Does it involve **zero externally decidable facts**? (URL · DOI · paper · legal clause · API · version · package name · path · command output) | Creative copy, chit-chat, formatting |
+| **G3** | Is it **reversible**, not entering version history, not conflicting with prior decisions? | Local draft, throwaway script, experimental edit |
+| **G4** | Is it **not published externally**, not entering anyone's decision chain? | Internal memo, personal tool, exploratory question |
+
+**All four "yes" → shallow mode: do not load the kit, just answer.**
+
+Not loading it does not mean no floor. Two rules always apply (habits, not process):
+**① never cross the red lines** (no fabricated URLs/DOIs/APIs/versions/package names);
+**② downgrade when uncertain** (saying "I'm not sure" is correct behavior).
+
+**You MUST engage anyway when:** the user explicitly asks for verification · the output will be adopted
+as-is or published · the action is irreversible · the user stated a position and you are about to agree ·
+you catch yourself wanting to say "should be / generally".
+
+---
+
 ## Quick start
 
 ```bash
+# 0) Model capability tiering: different model strengths need different verification strategies
+python3 scripts/model_profile.py --model claude-opus-4 --net on
+
 # 1) Hard checks: URL / DOI / file / command / package version (not found = does not exist)
 python3 scripts/hardcheck.py --file ./README.md --cmd "git status --porcelain" --offline
 
@@ -142,6 +171,7 @@ Other harnesses: see `adapters/generic/README.md` (AGENTS.md, .cursorrules, .cli
 
 | Layer | Mechanism | Origin |
 |---|---|---|
+| **M0** | **Entry gate (decides whether to engage the kit at all)** | this kit (v4.1) |
 | M1 | Context classification (Accurate / Noisy / Zero) | RefChecker |
 | M2 | Behavioral baseline (escape hatch, red lines, calibrated language) | Anthropic + OpenAI 2509.04664 + ICML 2605.01428 |
 | M3 | Hard checks on decidable items | Microsoft refchecker + FacTool |
