@@ -97,6 +97,11 @@ python3 scripts/hardcheck.py --cmd "./gradlew :app:compileDebugKotlin"
 
 ## 5. 编码模式的工作流调整
 
+**先过入场门**：单文件改写、调样式、重命名、加个日志、解释现有代码——
+这类小改动**不进本流程**，直接改直接答（见 SKILL.md「入场门」）。
+只有涉及**新依赖 / 不熟的 API / 版本升级 / 跨文件重构**时才走下面的流程——
+这些才是幻影 import 和 slopsquatting 的高发区。
+
 ```
 [0] 判上下文：本仓库结构/内容 = Accurate（但必须实际读）
               第三方库行为 = Zero（查文档/源码，禁止凭记忆）
