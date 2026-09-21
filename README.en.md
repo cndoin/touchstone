@@ -52,6 +52,35 @@ you catch yourself wanting to say "should be / generally".
 
 ---
 
+## Math mode (v4.2: numeric conclusions are not computed in your head)
+
+**Mathematical hallucination is different from ordinary factual hallucination — at least half of it is decidable.**
+Whether arithmetic is right and whether a proof is valid can be machine-checked, so that half can be
+driven close to zero. But the errors sit in different layers, and **the treatments do not transfer between them**.
+
+| Layer | Symptom | Treatment | Status |
+|---|---|---|---|
+| ① Arithmetic / symbolic slip | `3×7=20`, sign error when transposing | **Force a deterministic engine** (Python / SymPy / Z3) | Solved |
+| ② **Executable but ungrounded** | Formula right, units right, **wrong variable** | **Two-layer check**: symbolic validity + semantic groundedness | Research frontier |
+| ③ Ill-posed / under-specified | A missing premise, self-contradictory, outside the domain | **Abstain / clarify gate** (decide *before* answering) | **Hardest** |
+| ④ The verifier itself is untrustworthy | Rule-based misses equivalent formats; model-based gets gamed | **De-anchor**: the judge commits its own answer first | Clear fix exists |
+
+**Four hard clauses:**
+
+1. **A numeric conclusion must carry an execution record** — from an actually-run `python3 -c "…"` or SymPy, never "I believe".
+2. **Tool success ≠ correct math.** Running clean only proves the syntax is valid. The second layer must ask
+   **"Which word in the problem statement does this variable refer to?"** — if you cannot point to it, the step is ungrounded; downgrade it.
+3. **Decide whether the premises are complete before answering**: missing ⇒ ask first; if asking is impossible, **condition the answer**
+   ("if X = … then …"); abstain only last. **Never silently invent a value to fill the gap.**
+4. **When checking an answer, the judge commits its own answer first** (Iron Rule 2 in the math domain). Reversing the order
+   zeroes out the chain: seeing the candidate first pushes the false-positive rate from 0.012 back to 0.719.
+
+> ⚠ Layer ③ **does not improve with a stronger model, nor with more thinking time** —
+> on the Soohak refusal subset **no model exceeds 50%** (arXiv 2605.09063).
+> So do not use "check it again more carefully" as a gate. See `references/18-math-mode.md`.
+
+---
+
 ## Quick start
 
 ```bash
@@ -75,7 +104,7 @@ python3 scripts/ledger.py check --root . --drift
 python3 scripts/pipeline.py --root . --checks checks.json --claims claims.json --level L1
 
 # 6) Self-tests
-python3 scripts/selftest.py           # 38 smoke cases (seconds)
+python3 scripts/selftest.py           # 72 smoke cases (seconds)
 python3 scripts/robustness_test.py    # 70 deep cases (boundary/anomaly/concurrency/perf)
 python3 scripts/stability_test.py     # 99 engineering-consistency cases (97 with --no-install-check)
 python3 scripts/audit.py              # open-source compliance audit
@@ -127,7 +156,7 @@ touchstone/
 │   ├── pipeline.py               One-command orchestration
 │   ├── selfcheck.py              Sampling consistency (fallback when nothing to check against)
 │   ├── regression.py             Hallucination regression suite
-│   ├── selftest.py               38 smoke cases
+│   ├── selftest.py               72 smoke cases
 │   ├── robustness_test.py        70 deep cases
 │   ├── stability_test.py         99 engineering-consistency cases
 │   └── audit.py                  Open-source compliance audit
@@ -178,6 +207,7 @@ Other harnesses: see `adapters/generic/README.md` (AGENTS.md, .cursorrules, .cli
 | M4 | 8-step workflow with context-isolated verification | FacTool + CoVe |
 | M5 | Labels / confidence / counterexamples | verify-gate + Cleanlab TLM |
 | M6 | Cost routing (cheap first, escalate on gray zone) | HalluScan ADR |
+| **M7** | **Math mode (forced deterministic engine + semantic groundedness + ill-posed gate)** | **this kit (v4.2); theory from Neuro-symbolic PRM 2608.26329 / Soohak 2605.09063 / 2607.05904** |
 
 Plus two layers this kit adds: **large-project mechanics** (ledger + drift) and **executable gates**.
 
@@ -201,7 +231,7 @@ Plus two layers this kit adds: **large-project mechanics** (ledger + drift) and 
 | | `selftest.py` | `robustness_test.py` | `stability_test.py` |
 |---|---|---|---|
 | Role | Fast smoke | Deep robustness | Engineering consistency |
-| Cases | 38 | 70 | 99 (97 with `--no-install-check`) |
+| Cases | 72 | 70 | 99 (97 with `--no-install-check`) |
 | Covers | Happy path + key failure paths | Boundaries, anomalies, encodings, concurrency, performance, idempotency | Compilation, idempotency, concurrent writes, fuzz, environment (GBK / offline / read-only / non-ASCII paths), doc & version consistency, asset validity, install-dir sync |
 | Runtime | seconds | tens of seconds | minutes (includes 16-way concurrency and 200KB inputs) |
 | Run it | after every change | before release, after environment change | before release (especially after touching hooks, docs, or the version number) |

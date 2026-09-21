@@ -37,6 +37,17 @@
 | **Sycophantic AI decreases prosocial intentions and promotes dependence** | *Science* 391(6792)，DOI 10.1126/science.aec8352；预印本 arXiv 2510.01395 | **诱导型幻觉**：肯定用户比人类多 49%；造成伤害的特征正是驱动留存的特征 | 一手（卷期 + DOI）；其中 51%/47% 两个细分为二手转述 |
 | **Sycophantic Chatbots Cause Delusional Spiraling, Even in Ideal Bayesians** | arXiv 2602.19141（Chandra, Kleiman-Weiner, Ragan-Kelley, Tenenbaum，MIT CSAIL） | 告知用户与禁止造假两种缓解均失效 → 只能靠**中性重述 + 隔离**做结构性防御 | 一手（arXiv 摘要） |
 | **Confidently Wrong** | arXiv 2607.11414（Richard Zhe Wang，2026-07-13） | 自一致性天花板：**限定域**——在 FinQA（金融 QA）上，8/8 采样一致的答案仍有 15–23% 错；模型为 Qwen3-8B / Llama-3.1-8B / Gemma-2-9B。**摘要确认采用 15–23%，二手转述的 5–19% 不采用** | 一手（arXiv 摘要原文）；存在二手冲突已标注并以一手为准 |
+| **Neuro-symbolic PRM** | arXiv 2608.26329（Yuxin Zi, Cong Xu, Suparna Bhattacharya, Martin Foltin, Amit Sheth，2026-08-26） | 借鉴「符号有效性 V + 语义接地 G」双层拆分与 **CSP 反事实符号扰动**思路；本套件第②层「工具成功 ≠ 算对」的直接理论来源 | 一手（arXiv 摘要原文） |
+| **Soohak** | arXiv 2605.09063（Guijin Son et al.，2026-05-09，v3） | 借鉴其 **refusal 子集**设计思路与「拒答不随规模/测试时计算扩展」的结论；本套件病态题前置闸门的实证依据 | 一手（arXiv 摘要原文） |
+| **From Accuracy to Robustness** | arXiv 2505.22203（EMNLP 2026 Main，Yuzhen Huang et al.） | 借鉴「规则式漏判 / 模型式被奖励黑客」二分，及「分类准确率 ≠ 抗黑客能力」结论 | 一手（EMNLP 2026 摘要原文） |
+| **More Convincing, Not More Correct** | arXiv 2607.05904（Chenyu Zhou，2026-07-07） | 借鉴 **commit-first 去锚定**（裁判先自立作答）；本项目铁律 2「隔离验证」在数学域的形态 | 一手（arXiv 摘要原文） |
+| **Ask, Condition or Abstain（ACA-RL）** | arXiv 2608.16554（EMNLP 2026，Yongqi Tong et al.） | 借鉴「追问 / 条件化 / 拒答」三选与 Missing-Premise Benchmark 的设计视角 | 一手（EMNLP 2026 摘要原文） |
+| **Answering the Unanswerable** | arXiv 2508.18760；AAAI 2026，DOI 10.1609/aaai.v40i38.40496 | 借鉴「内部认知与外部回应错位」的诊断，说明闸门目标是逼出已有信号而非教新知识 | 一手（arXiv 摘要 + AAAI DOI） |
+| **VeriFin** | arXiv 2608.10213（Bethel Hall, Sachi Shome, William Eiers，2026-08-10） | 借鉴「操作数绑定源事实 + Z3 判定 + 不可满足核定位」的数值核查范式（零误收） | 一手（arXiv 摘要原文） |
+| **AI-Driven Formal Proof Search** | arXiv 2605.22763（DeepMind，George Tsoukalas et al.，2026-05-21） | 借鉴「形式化证书是唯一绝对保证」的定位与成本量级判断 | 一手（arXiv 摘要原文） |
+| **Automated Conjecture Resolution** | arXiv 2604.03789（Haocheng Ju et al.，2026-04-04） | 借鉴 Rethlas + Archon「非形式推理 agent + 形式验证 agent」双 agent 流水线（与本套件隔离原则同构） | 一手（arXiv 摘要原文） |
+| **Tool-Integrated RL** | arXiv 2608.28447（Minghui Xu, Zi Wang，2026-08-28） | 借鉴「计算错误占失败相当比例」的量化与工具集成的收益量级 | 一手（arXiv 摘要原文） |
+| **SOS Certificates** | arXiv 2608.00326（Bohan Chen et al.，2026-07-31） | 借鉴「精确可校验输出」形态（展开比对系数即可验证） | 一手（arXiv 摘要原文） |
 | **Diversion Decoding** | arXiv 2607.10476 | 比语义熵便宜 ~2.8× 且不弱的不确定性估计 | 一手（arXiv HTML 结果表） |
 | **When Small Models Are Right for Wrong Reasons** | arXiv 2601.00513（AAAI 2026 TrustAgent Workshop） | 小模型 self-critique 有害、RAG 有益；外部/蒸馏验证器替代自反思 | 一手（arXiv 摘要） |
 | **Scaling Down Hallucinations** | ICCSA 2026，DOI 10.1007/978-3-032-30488-9_39 | 紧凑模型上无单一方法全任务占优 → 方法必须按任务实测 | 一手（ACM DL 书目记录） |

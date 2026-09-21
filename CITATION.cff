@@ -16,7 +16,7 @@ authors:
     alias: "cndoin"
     website: "https://github.com/cndoin"
 license: MIT
-version: 4.1.0
+version: 4.2.0
 date-released: "2026-09-17"
 repository-code: "https://github.com/cndoin/touchstone"
 url: "https://github.com/cndoin/touchstone"
@@ -39,7 +39,7 @@ preferred-citation:
       alias: "cndoin"
       website: "https://github.com/cndoin"
   year: 2026
-  version: 4.1.0
+  version: 4.2.0
   license: MIT
 
 # ---------------------------------------------------------------------------
