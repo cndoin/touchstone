@@ -1,8 +1,8 @@
 ---
 name: touchstone
-description: Touchstone · anti-hallucination engineering kit (a touchstone is a stone for assaying gold; formerly named dehallucination). **Use ONLY when at least one of these holds:** (1) the output must cite externally decidable facts — URLs, DOIs, papers, legal clauses, API signatures, version numbers, package names, file paths, command output; (2) the domain is high-stakes or irreversible — legal, medical, financial, public release, production operations; (3) it is a large long-running project — multi-session, huge codebase, many subagents — where errors compound; (4) the user explicitly asks for verification — "does this really exist", "verify this", "don't make things up", "is this API/paper/file real", "are you sure it's finished"; (5) the output will be adopted without human review, or the user has stated a position and sycophancy is a risk. **Do NOT load this kit for:** chit-chat, creative writing, formatting tweaks, small single-file edits, small local refactors that run locally, explaining code, or one-off quick questions — these have no externally decidable facts, are reversible and internal; just answer directly. Loading the kit only slows things down and burns tokens.
+description: Touchstone · anti-hallucination engineering kit (a touchstone is a stone for assaying gold; formerly named dehallucination). **Use ONLY when at least one of these holds:** (1) the output must cite externally decidable facts — URLs, DOIs, papers, legal clauses, API signatures, version numbers, package names, file paths, command output; (2) the domain is high-stakes or irreversible — legal, medical, financial, public release, production operations; (3) it is a large long-running project — multi-session, huge codebase, many subagents — where errors compound; (4) the user explicitly asks for verification — "does this really exist", "verify this", "don't make things up", "is this API/paper/file real", "are you sure it's finished"; (5) the output will be adopted without human review, or the user has stated a position and sycophancy is a risk; (6) **the output contains numeric or symbolic conclusions that will be adopted** — money, tax rates, schedules, capacity, ratios, financial or statistical bases, formula derivations, engineering parameters, or reproducing numbers from a paper (mental arithmetic, wrong bases, and under-specified problems all fall here). **Do NOT load this kit for:** chit-chat, creative writing, formatting tweaks, small single-file edits, small local refactors that run locally, explaining code, one-off quick questions, or a single-point arithmetic question ("what is 3 squared") — these have no externally decidable facts, are reversible and internal; just answer directly. Loading the kit only slows things down and burns tokens.
 license: MIT
-version: 4.1.0
+version: 4.2.0
 ---
 
 # Touchstone · Anti-Hallucination Engineering Kit
@@ -185,7 +185,7 @@ python3 scripts/dep_guard.py --root . [--offline] [--strict]
 python3 scripts/claim_lint.py --input claims.json --min-level L1
 python3 scripts/pipeline.py --root . --checks checks.json --claims claims.json
 python3 scripts/ledger.py check --root . --drift
-python3 scripts/selftest.py            # 38 smoke cases (seconds)
+python3 scripts/selftest.py            # 72 smoke cases (seconds)
 python3 scripts/robustness_test.py     # 70 deep cases (boundary/anomaly/concurrency/perf)
 python3 scripts/stability_test.py      # 99 engineering-consistency cases
 python3 scripts/audit.py               # open-source compliance audit
@@ -196,6 +196,32 @@ Principles: **fail-closed** (failure = unverified, never pass), **zero third-par
 
 Exit codes: `0` pass · `1` failed · `2` unverified · `3` usage/input error
 (`selfcheck.py` uses codes as routing signals: 0 high / 2 gray / 4 low / 3 error).
+
+---
+
+## Math mode (read this when numeric or symbolic conclusions appear)
+
+> Full detail in `references/18-math-mode.md`. **At least half of mathematical hallucination is decidable** — so do not treat it like ordinary factual hallucination.
+
+**Trigger**: the output will contain numeric results (money, schedules, ratios, integrals, matrices), symbolic derivation, or you are about to write a mental estimate like "times 0.7 is roughly …" into the prose.
+
+**Four layers, four treatments (do not use the wrong layer)**:
+
+| Layer | Symptom | Treatment |
+|---|---|---|
+| ① Arithmetic / symbolic slip | `3×7=20`, sign error when transposing | **Force a deterministic engine** (Python / SymPy / Z3); never do it mentally |
+| ② **Executable but ungrounded** | Formula right, units right, **wrong variable** | **Two-layer check**: symbolic validity + semantic groundedness |
+| ③ Ill-posed / under-specified | A missing premise, self-contradictory, outside the domain | **Abstain / clarify gate** — decide *before* answering |
+| ④ The verifier itself is untrustworthy | Rule-based misses equivalent formats; model-based gets gamed | **De-anchor**: the judge commits its own answer first |
+
+**Four hard clauses**:
+
+1. **A numeric conclusion must have an execution record** — output from an actually-run `python3 -c "…"` or SymPy, never "I believe". A number with no execution record counts as unverified.
+2. **Tool success ≠ correct math.** Running clean only proves the syntax is valid. The second layer must ask: **"Which word in the problem statement does this variable refer to?"** If you cannot point to it, the step is ungrounded — downgrade it.
+3. **Decide whether the premises are complete before you answer.** Missing ⇒ **ask first**; if asking is not possible, condition the answer ("if X = … then …"); abstain only as a last resort.
+   **Never silently invent a value** to produce a unique answer; if you must assume, flag it and give sensitivity.
+   ⚠ This layer **does not improve with a stronger model, nor with more thinking time** — on the Soohak refusal subset **no model exceeds 50%**; and inference-time thinking mode **reduces** proactive critical thinking in untrained models. Do not use "check it again more carefully" as a gate.
+4. **When checking an answer, the judge must commit its own answer first** (this is Iron Rule 2 in the math domain). Reversing the order zeroes out the whole verification chain — seeing the candidate first pushes the false-positive rate from 0.012 back to 0.719.
 
 ---
 
@@ -216,6 +242,9 @@ Exit codes: `0` pass · `1` failed · `2` unverified · `3` usage/input error
 | Write "be careful not to be sycophantic" in the prompt | First-party evidence: self-reminders and user warnings both fail. Restate neutrally + isolate |
 | Ask a small model to "reflect on it" | Empirically harmful (d = −0.14 to −0.33). Give it evidence instead |
 | Use second-hand numbers as facts | Trace to the primary source or mark unknown |
+| **Do mental arithmetic and write the number straight into the prose** | Computation is deterministic work; hand it to an engine. A number with no execution record is an unverified number |
+| **Treat "the code ran" as "the math is right"** | Tool **success** ≠ pass: code that is syntactically valid, dimensionally consistent, but substitutes the wrong variable runs silently |
+| **Invent a value to fill in an under-specified problem** | Arbitrary condition fabrication. Ask when the premises are incomplete; if you must assume, flag it loudly and give sensitivity |
 
 ---
 
@@ -240,5 +269,6 @@ Exit codes: `0` pass · `1` failed · `2` unverified · `3` usage/input error
 | `references/15-stability-performance.md` | Environment matrix, caching, budgeting, crash discipline |
 | `references/16-model-adaptation.md` | Model tiers: strong models self-check, weak models use scripts; vendor mechanisms |
 | `references/17-vendor-and-induction.md` | **Vendor official approaches (OpenAI/Anthropic, first-party) + sycophancy-induced hallucination + self-consistency ceiling + detector-permission tiers + per-tier playbook** |
+| `references/18-math-mode.md` | **Math mode: four error layers and their treatments + forced deterministic engine + two-layer semantic groundedness check + ill-posed abstain/clarify gate + de-anchoring** |
 
 License & attribution: `LICENSE` (MIT) · `NOTICE` · `ATTRIBUTIONS.md` (sources, licenses, primary/secondary tagging) · `CITATION.cff`.
