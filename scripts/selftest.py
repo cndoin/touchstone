@@ -290,6 +290,83 @@ def main(argv=None):
         case("hook verify_gate 阻断循环内改用温和反馈（exit 0）", [vg], 0,
              stdin_data=json.dumps({"cwd": claims_dir, "stop_hook_active": True}))
 
+    # --- v4.2.1 新增：命令执行 RCE 回归 -------------------------------
+    # 历史：verify_gate 曾用 subprocess.run(cmd, shell=True, cwd=cwd) 执行
+    # claims 文件里的 command。claims 文件在**项目目录内** —— clone 一个恶意
+    # 仓库，Stop hook 就会以用户身份静默执行它写的任意命令，且完全绕过
+    # guard_bash（hook 子进程不走 Bash 工具调用，PreToolUse 从不触发）。
+    #
+    # 这一组断言的是**副作用未发生**，不是退出码。只看退出码的测试在
+    # 「修错了但恰好退出码对」时会给假绿，而安全回归恰恰最怕假绿。
+    _PAYLOAD_LINES = ["import sys",
+                      'open(sys.argv[1], "w").write("pwned")',
+                      ""]
+
+    def _write_payload(d):
+        fp = os.path.join(d, "payload.py")
+        with open(fp, "w", encoding="utf-8") as fh:
+            fh.write(chr(10).join(_PAYLOAD_LINES))
+        return fp, os.path.join(d, "PWNED.txt")
+
+    if os.path.exists(vg):
+        rce_dir = os.path.join(tmp, "rce")
+        os.makedirs(os.path.join(rce_dir, ".touchstone"), exist_ok=True)
+        _pl, marker = _write_payload(rce_dir)
+        evil = '"%s" "%s" "%s"' % (sys.executable, _pl, marker)
+        claims = os.path.join(rce_dir, ".touchstone", "execution_claims.json")
+
+        def _claims(obj):
+            with open(claims, "w", encoding="utf-8") as fh:
+                json.dump(obj, fh, ensure_ascii=False)
+
+        # 1) 含 command 的声明：不执行、不阻断
+        _claims({"execution_claims": [{"claim": "恶意 command", "evidence": "真实输出",
+                                       "verified": True, "command": evil}]})
+        case("hook verify_gate 含 command 的声明不阻断（command 不执行）", [vg], 0,
+             stdin_data=json.dumps({"cwd": rce_dir}))
+        results.append(Result(
+            "RCE 回归：verify_gate 未触发 payload（副作用文件不存在）",
+            not os.path.exists(marker), False, os.path.exists(marker),
+            "marker=%s" % marker))
+
+        # 2) 同一份含 command 的声明，若另有真实缺陷仍须阻断 ——
+        #    证明删掉执行路径没有把闸门一起削掉
+        _claims({"execution_claims": [{"claim": "没有证据", "verified": True,
+                                       "command": evil}]})
+        case("hook verify_gate 含 command 但缺 evidence 仍阻断（闸门未削弱）", [vg], 2,
+             stdin_data=json.dumps({"cwd": rce_dir}))
+        results.append(Result(
+            "RCE 回归：阻断用例同样未触发 payload",
+            not os.path.exists(marker), False, os.path.exists(marker),
+            "marker=%s" % marker))
+
+    # --- v4.2.1 新增：ledger 的 command verify 默认不执行 ----------------
+    lg_dir = os.path.join(tmp, "ledger-rce")
+    os.makedirs(os.path.join(lg_dir, ".touchstone"), exist_ok=True)
+    _lpl, lg_marker = _write_payload(lg_dir)
+    lg_evil = '"%s" "%s" "%s"' % (sys.executable, _lpl, lg_marker)
+    lg_file = os.path.join(lg_dir, ".touchstone", "ledger.json")
+    with open(lg_file, "w", encoding="utf-8") as f:
+        json.dump({"version": 2, "entries": [{
+            "id": 1, "kind": "fact", "subject": "S", "value": "V",
+            "status": "confirmed",
+            "verify": {"type": "command", "cmd": lg_evil},
+        }]}, f, ensure_ascii=False)
+
+    case("ledger command verify 默认不执行（记 unverified，不当 drift）",
+         [lg, "--file", lg_file, "check", "--root", lg_dir], 0)
+    results.append(Result(
+        "RCE 回归：ledger check 未触发 payload（副作用文件不存在）",
+        not os.path.exists(lg_marker), False, os.path.exists(lg_marker),
+        "marker=%s" % lg_marker))
+
+    case("ledger command verify 显式 --allow-exec 后才执行",
+         [lg, "--file", lg_file, "check", "--root", lg_dir, "--allow-exec"], 0)
+    results.append(Result(
+        "授权路径可用：--allow-exec 后 payload 确已执行",
+        os.path.exists(lg_marker), True, os.path.exists(lg_marker),
+        "marker=%s" % lg_marker))
+
     passed = sum(1 for r in results if r.ok)
     failed = len(results) - passed
 

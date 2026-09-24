@@ -20,6 +20,10 @@
   {"type": "dir_exists",    "path": "..."}
   {"type": "command",       "cmd": "..."}   # exit code 0 视为满足
 
+  注意：command 类型的命令**默认不执行** —— 命令来自账本文件（项目内），不是人来给的。
+  执行权只能来自人，要执行必须显式加 --allow-exec。理由同 verify_gate.py：
+  clone 一个别人的仓库后跑推荐用法 check，账本里的命令就是攻击者的命令。
+
 用法：
   python ledger.py add --kind decision --subject "DI 框架" --value "Hilt" \
       --source "docs/arch.md#3" --verify-file app/build.gradle.kts --verify-pattern hilt
@@ -81,8 +85,17 @@ def norm(s):
     return re.sub(r"\s+", " ", str(s or "")).strip().lower()
 
 
-def run_verify(verify, root, timeout=10):
-    """实际执行 verify 条件。返回 (status, detail)。status: pass|fail|unverified"""
+def oneline(s, n=140):
+    """把多行命令压成单行短串，便于写进 detail（不依赖正则转义）。"""
+    return " ".join(str(s or "").split())[:n]
+
+
+def run_verify(verify, root, timeout=10, allow_exec=False):
+    """实际执行 verify 条件。返回 (status, detail)。status: pass|fail|unverified
+
+    allow_exec=False（默认）时，command 类型**不执行**，直接记 unverified。
+    执行权只能来自人（--allow-exec），不能来自账本文件。
+    """
     if not isinstance(verify, dict) or not verify.get("type"):
         return "unverified", "verify 字段缺失或格式不对"
     vtype = verify.get("type")
@@ -116,6 +129,17 @@ def run_verify(verify, root, timeout=10):
         cmd = verify.get("cmd")
         if not cmd:
             return "unverified", "command 缺 cmd"
+        # ── 安全：命令来自账本文件（项目内），默认不执行 ──────────────
+        # 与 verify_gate.py 同一类缺陷：.touchstone/ledger.json 是项目内的
+        # 文件。clone 一个不可信仓库后跑本文件推荐的 check，账本里记的命令
+        # 就是攻击者的命令，以你的身份执行。
+        # 执行权只能来自人：显式加 --allow-exec 才跑。
+        # 授权后仍用 shell=True —— 那是"人看过这条命令并同意按原样跑"，
+        # 等价于自己在终端里敲一遍；改 argv 语义会静默破坏合法管道。
+        if not allow_exec:
+            return "unverified", (
+                "command 类型默认不执行（命令来自账本文件而非人）：%s｜"
+                "确需执行请加 --allow-exec，或自己跑一遍" % oneline(cmd))
         try:
             proc = subprocess.run(cmd, shell=True, cwd=root, capture_output=True,
                                   text=True, timeout=timeout, errors="replace")
@@ -123,8 +147,9 @@ def run_verify(verify, root, timeout=10):
             return "unverified", "命令超时"
         except Exception as e:
             return "unverified", "%s: %s" % (type(e).__name__, e)
-        return ("pass" if proc.returncode == 0 else "fail"), "exit=%d | %s" % (
-            proc.returncode, ((proc.stdout or "") + (proc.stderr or "")).strip()[:200])
+        return ("pass" if proc.returncode == 0 else "fail"), "exit=%d | %s | cmd=%s" % (
+            proc.returncode, ((proc.stdout or "") + (proc.stderr or "")).strip()[:200],
+            oneline(cmd))
 
     return "unverified", "未知 verify 类型：%s" % vtype
 
@@ -217,7 +242,8 @@ def cmd_check(args):
             results.append({"id": e.get("id"), "subject": e.get("subject"),
                             "status": "unverified", "detail": "无 verify 条件，跳过机器校验"})
             continue
-        st, detail = run_verify(verify, args.root, timeout=args.timeout)
+        st, detail = run_verify(verify, args.root, timeout=args.timeout,
+                                allow_exec=args.allow_exec)
         if st == "fail":
             drifted += 1
             if args.fix:
@@ -298,6 +324,8 @@ def build_parser():
     ck.add_argument("--drift", action="store_true", help="存在 stale 条目时也返回非零")
     ck.add_argument("--fix", action="store_true", help="把 drift 条目标为 stale 并写回")
     ck.add_argument("--timeout", type=float, default=10.0)
+    ck.add_argument("--allow-exec", action="store_true",
+                     help="允许执行 command 类型的验证命令（默认拒绝：命令来自账本文件，不是人给的）")
     ck.set_defaults(func=cmd_check)
 
     return p

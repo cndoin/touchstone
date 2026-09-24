@@ -16,6 +16,13 @@ v3 关键修复 —— 官方语义有两个坑，必须绕开：
   2. PostToolUse 的 exit 2 不能撤销已执行的工具；能真正阻断的是
      PreToolUse / Stop / SubagentStop / UserPromptSubmit。本 hook 挂在 Stop 上，阻断有效。
 
+v4.2.1 安全修复 —— execution_claims[].command 不再执行：
+  之前本 hook 会用 subprocess.run(cmd, shell=True, cwd=cwd) 重新执行声明里的
+  命令。但 .touchstone/execution_claims.json 是**项目内的文件**：clone 一个
+  恶意仓库后，Stop hook 会以你的身份静默执行它写的任意命令，而且绕过
+  guard_bash（hook 子进程不走 Bash 工具调用，PreToolUse 从不触发）。
+  现在该字段只被记录、不被执行。理由见 collect_problems 内的注释。
+
 输入：stdin JSON（含 cwd、session_id、stop_hook_active）
 输出：stdout JSON（additionalContext）或 stderr 文本 + 退出码
 
@@ -25,7 +32,6 @@ v3 关键修复 —— 官方语义有两个坑，必须绕开：
 import json
 import os
 import re
-import subprocess
 import sys
 import time
 
@@ -83,7 +89,12 @@ def emit_context(text):
 
 
 def collect_problems(cwd, doc):
+    """返回 (problems, notes)。problems 阻断；notes 只提示，永不阻断。
+
+    ⚠️ 安全边界：本函数**绝不执行** claims 文件里的任何内容，只读它。
+    """
     problems = []
+    notes = []
     for i, c in enumerate(doc.get("execution_claims") or []):
         if not isinstance(c, dict):
             problems.append("execution_claims[%d] 不是对象" % i)
@@ -99,16 +110,29 @@ def collect_problems(cwd, doc):
             full = p if os.path.isabs(p) else os.path.join(cwd, p)
             if not os.path.exists(full):
                 problems.append("「%s」：路径不存在 %s" % (label, full))
-        cmd = c.get("command")
-        if cmd:
-            try:
-                r = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True,
-                                   text=True, timeout=60, errors="replace")
-                if r.returncode != 0:
-                    problems.append("「%s」：命令 exit=%d（%s）" % (
-                        label, r.returncode, (r.stdout or r.stderr or "")[:200]))
-            except Exception as e:
-                problems.append("「%s」：命令执行失败 %s（记为未验证）" % (label, e))
+        # ── 安全：execution_claims[].command 永不执行 ──────────────
+        # 历史（v4.2.0 及之前）：这里是
+        #     subprocess.run(cmd, shell=True, cwd=cwd, ...)
+        # 那是一个 RCE：声明文件在项目目录内，clone 一个恶意仓库后
+        # Stop hook 会以用户身份静默执行它写的任意命令。
+        #
+        # 为什么是「删掉」而不是「加白名单 / 加沙箱」：
+        #   1. command 从未进入输出契约 —— assets/claim-schema.json
+        #      的 execution_claims 只声明 claim/evidence/verified；示例与模板没有它；
+        #      claim_lint.py 也从不读它。它是实现里长出来的孤儿字段。
+        #   2. 任何「过滤 + 执行」都可被绕过：make / npm ci（跑
+        #      postinstall）/ cargo build（跑 build.rs）/ git 钩子 / 解释器 -c
+        #      都是任意执行的等价物。白名单只会又漏又误伤合法用法。
+        #   3. 闸门的契约是「要求证据」，不是「替模型复现证据」。
+        #      要复现就走正常 Bash 工具 —— 那样 guard_bash 会生效、用户也看得见。
+        #
+        # 注意：定为**非阻断提示**。若把「声明了 command」记成 problem，
+        # 恶意仓库就能靠这个字段制造阻断循环（DoS）。
+        if c.get("command"):
+            notes.append(
+                "「%s」：声明了 command，本闸门不执行（项目内文件里的命令不可信）；"
+                "要复现请走正常 Bash 工具，再把输出原文贴进 evidence"
+                % label)
 
     for key, val in (doc.get("hard_checks") or {}).items():
         if key in ("summary", "removed", "notes"):
@@ -116,7 +140,7 @@ def collect_problems(cwd, doc):
         ratio = parse_ratio(val)
         if ratio and ratio[0] < ratio[1]:
             problems.append("硬核查未全过：%s = %s（相关声明必须删除或降级）" % (key, val))
-    return problems
+    return problems, notes
 
 
 def main():
@@ -148,8 +172,12 @@ def main():
         sys.stderr.write("[touchstone] %s 解析失败：%s（放行）\n" % (CLAIMS_FILE, e))
         return EXIT_OK
 
-    problems = collect_problems(cwd, doc)
+    problems, notes = collect_problems(cwd, doc)
     count_path = os.path.join(cwd, COUNT_FILE)
+
+    # 非阻断提示：只写 stderr，不影响退出码
+    for n in notes:
+        sys.stderr.write("[touchstone] 提示：%s\n" % n)
 
     if not problems:
         write_count(count_path, 0)
