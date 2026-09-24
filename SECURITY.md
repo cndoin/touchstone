@@ -22,8 +22,14 @@
 - 不执行除你显式传入的命令之外的任何命令（`hardcheck.py --cmd` 是你自己给的）
 - 拦截高危命令的 hook（`guard_bash.py`）只做**阻断**，不会替你执行任何东西
 
-唯一会真正执行命令的地方：`hardcheck.py --cmd` 和 `ledger.py` 的 command 类型校验 ——
-**命令由调用方提供，脚本不做任何拼接或注入**。
+### 执行原则：执行权限只能来自人，不能来自文件
+
+| 命令来源 | 例子 | 是否执行 |
+|---|---|---|
+| 人当场传入 | `hardcheck.py --cmd "..."`、`ledger.py add --verify-cmd "..."` | **执行** —— 你在终端里当场给的，权责在你自己 |
+| 项目内文件 | claims 里的 `command`（结构见 `assets/claim-schema.json`）、账本 `verify.cmd`（见 `assets/ledger-schema.json`） | **默认不执行** —— 文件可能来自克隆来的仓库，它没有资格授权 |
+
+第二行是 v4.2.1 修复的缺陷：`verify_gate.py` 此前会自动执行 claims 里的 `command`，构成「clone 一个恶意仓库即 RCE」，且绕过 `guard_bash`（hook 是宿主直接 fork 的子进程，不走 Bash 工具调用）。现在该字段只被记录。账本里的命令须显式加 `ledger.py check --allow-exec` 才执行。详见 `CHANGELOG.md` v4.2.1。
 
 ---
 

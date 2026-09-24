@@ -6,6 +6,70 @@
 
 ---
 
+## v4.2.1（2026-09-24）· 安全修复：删除仓库内命令的执行路径（RCE）
+
+**PATCH：纯缺陷修复。** 未增删接口，未改动任何**由人传入**的命令执行语义。
+
+### 背景（问题是什么）
+
+`adapters/claude-code/hooks/verify_gate.py` 会用
+`subprocess.run(cmd, shell=True, cwd=cwd)` 执行 `.touchstone/execution_claims.json`
+里 `command` 字段的值，而该文件位于**项目目录内**。于是：
+
+clone 一个恶意仓库 → 在里面结束一次 Claude Code 对话 → Stop hook 触发 →
+以你的身份静默执行仓库里写好的任意命令，**且完全绕过 `guard_bash`**
+（hook 是宿主直接 fork 的子进程，不走 Bash 工具调用，PreToolUse 从不触发）。
+
+`scripts/ledger.py` 的 `command` 类型 verify 是同一类问题：命令来自
+`.touchstone/ledger.json`（项目内文件），跑本文件推荐的 `check` 就会执行它。
+
+这也与 `SECURITY.md` 自己的承诺直接冲突（原文称只执行「调用方传入的命令」）。
+
+### 为什么是「删掉」而不是「加白名单 / 加沙箱」
+
+1. `command` **从未进入输出契约**：`assets/claim-schema.json` 的 `execution_claims`
+   只声明 `claim`/`evidence`/`verified`；示例与模板都没有它；`claim_lint.py` 也从不读它。
+   它是实现里长出来的孤儿字段。
+2. 任何「过滤 + 执行」都能被绕过：`make`、`npm ci`（跑 postinstall）、
+   `cargo build`（跑 build.rs）、`git` 钩子、解释器 `-c` 都是任意执行的等价物。
+   白名单只会既漏又误伤合法用法。
+3. 闸门的契约是「要求证据」，不是「替模型复现证据」。要复现就走正常 Bash 工具 ——
+   那样 `guard_bash` 会生效、用户也看得见。
+
+### 改了什么
+
+| 文件 | 改动 |
+|---|---|
+| `adapters/claude-code/hooks/verify_gate.py` | 删除 command 执行路径与 `subprocess` 依赖；该字段改为**非阻断提示**（若记成 problem，恶意仓库就能靠它制造阻断循环 DoS） |
+| `scripts/ledger.py` | `run_verify` 的 `command` 类型默认**不执行**，记 `unverified` 并回显命令；新增 `check --allow-exec` 显式授权后才执行；执行时 detail 回显实际命令便于审计 |
+| `scripts/selftest.py` | 新增 8 条安全回归用例，**断言副作用未发生**而非退出码 |
+| `assets/claim-schema.json` / `assets/ledger-schema.json` | 明确写死「不执行其中的命令」 |
+| `SECURITY.md` | 修正「只执行调用方传入的命令」的陈述，写入核心原则 |
+| `adapters/claude-code/README.md` / `references/11-harness-adapters.md` | 补不执行语义；顺带修正退出码笔误（1 → 2） |
+
+### 核心原则（新增，已写进 SECURITY.md）
+
+**执行权限只能来自人，不能来自文件。**
+
+- 人来传入（`hardcheck.py --cmd`、`ledger.py add --verify-cmd`）→ 执行。
+  这是调用方在终端里当场给的，权责在自己。
+- 文件读取（claims 的 `command`、账本里的 `cmd`）→ 默认不执行。
+  文件可能来自克隆来的仓库，它没有资格授权。
+
+### 验证
+
+- **差分 PoC**（旧版 vs 新版，同一份攻击载荷）：旧版**被利用**、新版**打不动**、
+  显式 `--allow-exec` 后**仍可用**。三者同时成立才算修复被证明。
+- 为什么必须差分：只看「新版没被利用」证明不了什么，可能只是 PoC 写错了。
+- selftest 80 条；除 1 条已知的环境假象（沙箱代理对任意包名返 404）外全过。
+
+### 行为变更（唯一一条）
+
+账本里 `command` 类型的 verify 现在默认返回 `unverified`（不再执行）。
+依赖它的用户请加 `--allow-exec`。
+
+---
+
 ## v4.2.0（2026-09-21）· 数学模式：数值结论不许心算
 
 **MINOR：新增一层（M7）与一类触发条件，行为有变化但无破坏性。** 路径、脚本接口、退出码未改动，

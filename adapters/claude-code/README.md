@@ -64,6 +64,7 @@ cp -r "$SKILL_SRC" ~/.claude/skills/
 
 - `guard_bash.py`：**stdin 解析失败一律放行**。绝不能因为 hook 脚本的 bug 卡住正常工作。
 - `verify_gate.py`：没有 `execution_claims.json` 时**不阻断**（很多任务本就没有执行声明），只提示。
+- `verify_gate.py`：**不执行** claims 文件里的任何命令（v4.2.1 起）。该文件的 `command` 字段只是记录；闸门只校验「有没有证据」。要复现某条命令，就让模型走正常 Bash 工具 —— 那样 `guard_bash` 会生效、你自己也看得见。
 - 临时放行高危命令：`TOUCHSTONE_ALLOW_DANGEROUS=1`。
 
 ---

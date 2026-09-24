@@ -70,8 +70,10 @@ Claude Code 会在匹配任务时自动加载 `SKILL.md`。
 
 `verify_gate.py` 的行为（fail-closed）：
 - 读取本次会话声明产出物的清单（由主 agent 写入 `.touchstone/execution_claims.json`）
-- 逐条校验：文件是否存在、命令是否真跑过（有输出记录）
-- 缺证据 → 退出码 1，并往 stderr 输出要求（Claude Code 会把 stderr 反馈给模型，让它补证据）
+- 逐条校验：文件是否存在、有没有证据（工具实际输出的原文）
+- **不执行** claims 里的任何命令（v4.2.1 起）：`command` 字段只是记录。
+  要复现请走正常 Bash 工具 —— 那样 `guard_bash` 会生效、用户也看得见
+- 缺证据 → 退出码 2，并往 stderr 输出要求（Claude Code 会把 stderr 反馈给模型，让它补证据）
 
 > 注意：hooks 的字段与事件名随版本变化，**以官方文档为准**，配置后务必手动触发一次验证。
 

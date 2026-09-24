@@ -57,7 +57,7 @@
     },
     "execution_claims": {
       "type": "array",
-      "description": "执行类声明（'文件已创建'、'测试通过'、'已发送'）必须与事实声明同闸验证。",
+      "description": "执行类声明（'文件已创建'、'测试通过'、'已发送'）必须与事实声明同闸验证。闸门只校验结构与证据（evidence 必须是工具实际输出的原文），**不执行**其中的任何命令；多余字段会被忽略。",
       "items": {
         "type": "object",
         "required": ["claim", "verified"],

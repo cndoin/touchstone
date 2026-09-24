@@ -48,7 +48,7 @@
         },
         "path": { "type": "string", "description": "相对项目根目录的路径" },
         "pattern": { "type": "string", "description": "file_contains 用的正则（忽略大小写）" },
-        "cmd": { "type": "string", "description": "command 类型：exit code 0 视为满足" }
+        "cmd": { "type": "string", "description": "command 类型：exit code 0 视为满足。注意：命令来自账本文件（项目内），check 时**默认不执行**，记 unverified；确需执行请显式加 --allow-exec" }
       }
     }
   }
