@@ -25,7 +25,12 @@ EXIT_OK, EXIT_FAIL, EXIT_USAGE = 0, 1, 3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-SKIP_DIRS = {".git", "__pycache__", ".venv", "venv", "node_modules", "_deprecated-v1"}
+# SKIP_DIRS = 不属于发布产物的目录。
+# .touchstone/ 是本套件自己的运行时数据目录（账本/claims/压缩快照），
+# 已在 .gitignore 内 —— 扫它只会拿本机生成物去卡发布闸门：装了 hook 的
+# 用户在自己的项目里跑过一轮，就会看到「残留绝对路径」的假阳性。
+SKIP_DIRS = {".git", "__pycache__", ".venv", "venv", "node_modules",
+             "_deprecated-v1", ".touchstone"}
 
 # 公开发布前必须清掉的占位符
 PLACEHOLDERS = [
