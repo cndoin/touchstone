@@ -22,9 +22,9 @@
 ## 开发流程
 
 ```bash
-python3 scripts/selftest.py          # 快速冒烟（38 条，秒级）
+python3 scripts/selftest.py          # 快速冒烟（92 条，秒级）
 python3 scripts/robustness_test.py   # 深度健壮性（70 条）
-python3 scripts/stability_test.py    # 工程一致性（99 条，含文档/版本/安装同步）
+python3 scripts/stability_test.py    # 工程一致性（102 条，含文档/版本/安装同步）
 python3 scripts/audit.py --strict    # 开源合规审计（WARN 也算失败）
 
 # 元数据与资产校验（需要 PyYAML，仅本地/CI 用，不进产品代码）
@@ -37,10 +37,10 @@ python3 .github/validate-metadata.py
 `audit.py --strict` 与 `validate-metadata.py` 单独跑。
 
 > `stability_test.py` 的 G 组会拿工作区和安装目录逐字节比对（2 条）。
-> 跳过它时加 `--no-install-check`，此时是 **97 条** ——
-> **不是 99 条少了两条测试，是 G 组整体跳过**。
+> 跳过它时加 `--no-install-check`，此时是 **100 条** ——
+> **不是 102 条少了两条测试，是 G 组整体跳过**。
 > 安装目录不在默认位置时设 `TOUCHSTONE_INSTALLED=/path/to/skill`。
-> CI 里没有安装目录，所以 CI 跑的就是 97 条。
+> CI 里没有安装目录，所以 CI 跑的就是 100 条。
 
 ---
 
@@ -61,13 +61,22 @@ case("用例名", [脚本路径, "--参数"], 期望退出码)
 放在前两套之外、但同样会让技能包"烂掉"的东西 ——
 所有 `.py` 能否编译、重复执行是否一致、并发写会不会产出损坏 JSON、
 垃圾输入下会不会崩、GBK/离线/只读目录/非 ASCII 路径下的行为、
-文档写的版本号与 `VERSION` 是否一致、文档引用的文件是否真的存在、
+文档写的版本号与 `VERSION` 是否一致、文档写的测试条数与实测是否一致、
+文档引用的文件是否真的存在、
 工作区与安装目录是否同步。
 
 **新增脚本 / 新增 hook 时，这三类测试各补一条：**
 - `selftest.py`：正常路径 + 一条失败路径（断言退出码）
 - `robustness_test.py`：垃圾输入不崩（绝不 Traceback）
 - `stability_test.py`：一般不用改，A 组会自动把新 `.py` 纳入编译检查与 fuzz
+
+> **加了用例就要改文档里的条数。** `stability_test.py` 的 H 组拿一张登记表
+> （`COUNT_RULES`）把「文档写的条数」和「实测条数」逐条比对，实测值来自当场
+> 跑一遍 `selftest.py --json` / `robustness_test.py --json`。
+> 所以**改完用例不用手工同步文档**——H 组会直接告诉你哪个文件写错了。
+> 反过来，如果改了文档里条数的**写法**（比如把 `（92 条）` 改成 `共 92 项`），
+> 要在 `COUNT_RULES` 里补一条，否则那句声明脱离保护；
+> 而**登记了却匹配不到任何文本会判失败**，规则不会悄悄失效。
 
 新增脚本时，请至少补：
 - 正常输入 → 通过
