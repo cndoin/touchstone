@@ -37,6 +37,9 @@
 2. **新增 `scripts/bio_guard.py`** —— 八个检查器（`species` / `gene` / `id` / `orgdb` /
    `stat` / `numeric` / `overclaim` / `citation`）。零依赖、离线可用、fail-closed，
    stdout 只出 JSON，退出码沿用套件约定（0/1/2/3）。
+   同时接入 `pipeline.py`（新增 `--bio <文件>|auto`），让"硬核查 → 依赖 → 契约 → 生信"
+   成为一条命令；`--root` 扫描支持 `--exclude` 排除教学/规范类目录
+   （那类文档成篇是故意写错的示例，扫了只会得到一屏假红）。
 3. **`SKILL.md`**：新增「生物医学模式」章节；description 补入生信触发条件；
    红线清单补入基因 / 物种 / ID / 口径 / PMID；闸门清单与参考文件表同步。
 4. **`scripts/dep_guard.py`**：标准库改由 `sys.stdlib_module_names` 动态取

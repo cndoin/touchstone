@@ -319,7 +319,7 @@ python3 scripts/stability_test.py     # 99 条工程一致性：编译/幂等/�
 PY=python3          # Windows 用 python
 python3 scripts/bio_guard.py --file report.md          # 检查分析报告
 python3 scripts/bio_guard.py --file analysis.R         # 检查 R 脚本（额外查 organism/seed）
-python3 scripts/bio_guard.py --root . --json           # 扫整个项目
+python3 scripts/bio_guard.py --root . --exclude 'references/*' --json   # 扫项目（排除文档）
 ```
 
 **三层闸门都要过，顺序不能反**：技能层（`cp_lint`/`sc_lint`）→ 通用层（`hardcheck`）→ 领域层（`bio_guard`）。

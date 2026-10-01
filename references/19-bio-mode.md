@@ -267,8 +267,8 @@ python3 scripts/bio_guard.py --file report.md
 # 检查 R 脚本（自动识别 script 模式，额外查 seed / organism / keyType）
 python3 scripts/bio_guard.py --file analysis.R
 
-# 扫描整个项目目录
-python3 scripts/bio_guard.py --root . --json
+# 扫描整个项目目录（教学 / 规范文档必须排除，理由见下）
+python3 scripts/bio_guard.py --root . --exclude 'references/*' --json
 
 # 只跑指定检查器
 python3 scripts/bio_guard.py --file report.md --only species,id,stat,overclaim
@@ -292,6 +292,14 @@ python3 scripts/bio_guard.py --root . --offline --strict
 
 **退出码：0=全部通过 1=存在失败 2=存在需人工确认项 3=用法错误**
 （与套件其它脚本一致；`--strict` 下，需人工确认项也按失败计。）
+
+**适用范围（重要）**：它面向**待交付的分析产物**（分析报告、R/Python 脚本、结果摘要），
+**不是**用来扫教学 / 规范文档的 —— 后者成篇都是故意写错的示例（本章自己就是），
+扫出来只会是一屏假红，把真问题一起淹掉。要扫目录时用 `--exclude` 把这类目录排掉：
+
+```bash
+python3 scripts/bio_guard.py --root . --exclude 'references/*' --exclude 'docs/*'
+```
 
 **它不管什么**（别指望它）：基因是否**真实存在**（要查数据库）、通路 ID 与名称是否**对应**、
 数值是否**算对**、结论是否**科学**。它只保证"**格式与口径层面没有幻觉**"——

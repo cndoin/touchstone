@@ -58,6 +58,8 @@ def main(argv=None):
     p.add_argument("--offline", action="store_true", help="全程不联网")
     p.add_argument("--no-deps", action="store_true", help="跳过依赖幻觉检查")
     p.add_argument("--strict-deps", action="store_true", help="依赖检查把可疑项也当失败")
+    p.add_argument("--bio", metavar="FILE|auto",
+                   help="生物医学声明核查（19-bio-mode）：报告/脚本路径；auto=扫 --root")
     p.add_argument("--json", action="store_true", help="stdout 输出 JSON")
     p.add_argument("--report", help="报告写入该 JSON 文件")
     a = p.parse_args(argv)
@@ -129,6 +131,30 @@ def main(argv=None):
         worst = max(worst, SEVERITY.get(code, 3))
     else:
         steps.append({"step": "claim_lint", "exit_code": None, "skipped": "未提供 --claims"})
+
+    # [4] 生物医学声明核查（可选；生信/医学场景才需要）
+    if a.bio:
+        args = [os.path.join(HERE, "bio_guard.py")]
+        if a.bio == "auto":
+            args += ["--root", root]
+        else:
+            args += ["--file", a.bio]
+        if a.offline:
+            args.append("--offline")
+        args.append("--json")
+        code, out, errout = run_step(args, cwd=root)
+        data = None
+        try:
+            data = json.loads(out)
+        except Exception:
+            pass
+        steps.append({"step": "bio_guard", "exit_code": code,
+                      "summary": (data or {}).get("summary"),
+                      "stderr": errout.strip()[:300]})
+        worst = max(worst, SEVERITY.get(code, 3))
+    else:
+        steps.append({"step": "bio_guard", "exit_code": None,
+                      "skipped": "未提供 --bio（生信场景用 --bio <文件> 或 --bio auto）"})
 
     final = {v: k for k, v in SEVERITY.items()}[worst]
     verdict = {0: "PASSED", 1: "UNVERIFIED", 2: "BLOCKED", 3: "ERROR"}[worst]

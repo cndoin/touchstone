@@ -21,13 +21,20 @@
 用法：
   python3 bio_guard.py --file report.md
   python3 bio_guard.py --file analysis.R --only orgdb,stat
-  python3 bio_guard.py --root . --offline --strict --json
+  python3 bio_guard.py --root . --exclude 'references/*' --offline --strict --json
+
+适用范围（重要）：
+  它面向**待交付的分析产物**（分析报告、R/Python 脚本、结果摘要）。
+  **不要拿去扫教学/规范类文档** —— 那类文档成篇都是故意写错的示例，
+  扫出来是一屏假红，反而把真问题淹掉。需要扫目录时用 --exclude 把
+  references/ 、docs/ 这类目录排掉。
 
 退出码：0=全部通过 1=存在失败 2=存在需人工确认项 3=用法错误
 原则：**查不出的不假装查过**——只能判"形态与口径"，判不了"科学性"，后者交给人。
 """
 
 import argparse
+import fnmatch
 import os
 import re
 import sys
@@ -652,14 +659,18 @@ def read_text(path):
         return None
 
 
-def walk_root(root):
+def walk_root(root, excludes=()):
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
         for fn in filenames:
+            full = os.path.join(dirpath, fn)
+            rel = os.path.relpath(full, root).replace(os.sep, "/")
+            if any(fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(fn, pat) for pat in excludes):
+                continue
             ext = os.path.splitext(fn)[1].lower()
             if ext in SCAN_EXT:
-                out.append(os.path.join(dirpath, fn))
+                out.append(full)
             if len(out) >= MAX_TARGETS:
                 return out
     return out
@@ -676,6 +687,11 @@ def main(argv=None):
     parser.add_argument("--file", action="append", default=[],
                         help="待检查文件（可重复）")
     parser.add_argument("--root", help="扫描目录（递归，跳过 .git/node_modules 等）")
+    parser.add_argument("--exclude", action="append", default=[],
+                        metavar="GLOB",
+                        help="扫描时排除的路径（glob，可重复；只对 --root 生效）。"
+                             "**教学 / 规范类文档必须排除**：它们成篇都是故意写错的示例，"
+                             "扫了只会得到一屏假红，反而把真问题淹掉")
     parser.add_argument("--kind", choices=["auto", "report", "script"], default="auto",
                         help="文件类型；auto 按扩展名推断")
     parser.add_argument("--only", help="只跑指定检查器，逗号分隔：" + ",".join(CHECK_NAMES))
@@ -706,7 +722,7 @@ def main(argv=None):
         if not os.path.isdir(args.root):
             err("目录不存在：%s" % args.root)
             return EXIT_USAGE
-        targets.extend(walk_root(args.root))
+        targets.extend(walk_root(args.root, args.exclude))
     if not targets:
         err("没有待检查目标：至少给 --file 或 --root")
         return EXIT_USAGE

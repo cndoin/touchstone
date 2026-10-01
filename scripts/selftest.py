@@ -426,6 +426,30 @@ def main(argv=None):
         case("bio_guard --strict 将待确认项计为失败",
              [bg, "--file", cite_bio, "--only", "citation", "--strict"], 1)
 
+        # --exclude：教学/规范文档必须能被排掉，否则扫描结果是一屏假红
+        _c1, _o1, _ = run([bg, "--root", bio, "--offline", "--json", "--exclude", "*.R"])
+        _c2, _o2, _ = run([bg, "--root", bio, "--offline", "--json"])
+        try:
+            n_excl = len(json.loads(_o1)["scanned"])
+        except Exception:
+            n_excl = -1
+        try:
+            n_full = len(json.loads(_o2)["scanned"])
+        except Exception:
+            n_full = -1
+        results.append(Result(
+            "bio_guard --exclude 生效（排除后目标减少）",
+            n_excl == n_full - 1 and n_excl > 0, n_full - 1, n_excl,
+            "excluded=%s full=%s" % (n_excl, n_full)))
+
+        # pipeline 接入：生信步骤与其它步骤同等的"可选 / 失败即拦"
+        case("pipeline --bio 串联生信核查（坏样本 → 拦）",
+             [pl, "--root", tmp, "--no-deps", "--offline", "--bio", bad_bio], 1)
+        case("pipeline --bio 串联生信核查（合规样本 → 放行）",
+             [pl, "--root", tmp, "--no-deps", "--offline", "--bio", good_bio], 0)
+        case("pipeline 不传 --bio 时该步跳过（不影响总判定）",
+             [pl, "--root", tmp, "--no-deps", "--offline"], 0)
+
     passed = sum(1 for r in results if r.ok)
     failed = len(results) - passed
 
