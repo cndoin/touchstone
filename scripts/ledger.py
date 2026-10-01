@@ -32,6 +32,9 @@
   python ledger.py check --root . [--drift] [--fix]
   python ledger.py remove --id 3
 
+示例账本见 examples/ledger-example.json（--file 是**全局参数，要放在子命令前面**）：
+  python ledger.py --file examples/ledger-example.json list
+
 退出码（check）：0=账本与现实一致 1=存在 drift/fail 3=用法错误
 """
 

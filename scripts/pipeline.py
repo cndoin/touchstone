@@ -8,17 +8,31 @@
   [1] hardcheck  可判定项硬核查（URL/DOI/文件/命令/包版本）
   [2] dep_guard  依赖与符号幻觉防护（幻影 import / 包幻觉 / slopsquatting）
   [3] claim_lint 输出契约闸门
-  [4] 汇总       → 一份报告 + 一个退出码
+  [4] bio_guard  生物医学声明核查（可选，生信/医学场景用 --bio 打开）
+  [5] 汇总       → 一份报告 + 一个退出码
 
 设计原则：
   - 每一步独立失败不影响其它步骤执行完（但最终退出码取最严重者）
   - 任何一步的脚本缺失/崩溃 → 记为该步 unverified，不静默跳过
   - 全程可 --offline
 
+**哪些脚本刻意不在这条链上**（体量变大后这条边界必须有明文，见 CONTRIBUTING
+的「模块契约与边界」）。判据一句话：**能不能只看「当前产物 + 给定输入」
+就给出确定判定？** 不能的就是刻意留在外面的：
+
+    audit.py          触发时机不同 —— 发布前跑，与"这次交付对不对"无关
+    ledger.py         写账本，是记录动作而不是核查动作
+    regression.py     跑历史案例集，验的是"流程改完有没有退化"，需要时间维度
+    selfcheck.py      需要多轮采样，本质是交互式手段，离线跑不了
+    model_profile.py  查策略推荐，只读查询，不产生判定
+    verifiers.py      可插拔检测器的桥接，供人工在灰区单独调用
+    三套测试脚本      对象是脚本自己的运行时，不是交付物
+
 用法：
   python pipeline.py --root . --checks .touchstone/checks.json \\
                      --claims .touchstone/claims.json --level L1
   python pipeline.py --root . --offline --no-deps --json --report report.json
+  python pipeline.py --root . --offline --bio report.md      # 生信报告
 
 退出码：0=全通过 1=存在失败（不许交付） 2=存在未验证 3=用法错误
 """
