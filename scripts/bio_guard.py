@@ -33,16 +33,18 @@
 原则：**查不出的不假装查过**——只能判"形态与口径"，判不了"科学性"，后者交给人。
 """
 
-import argparse
 import fnmatch
+import io
 import os
 import re
 import sys
+import tokenize
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _common import (  # noqa: E402
     ArgParser,
+    EXIT_UNVERIFIED,
     EXIT_USAGE,
     FAIL,
     PASS,
@@ -53,6 +55,7 @@ from _common import (  # noqa: E402
     make_result,
     status_symbol,
     summarize,
+    _force_utf8,
 )
 
 # ---------------------------------------------------------------------------
@@ -179,7 +182,23 @@ RE_MT_OTHER = re.compile(r"\bmt-[A-Za-z0-9]{1,6}\b")
 
 # 基因候选：2–10 位的字母+数字组合
 RE_GENE_UPPER = re.compile(r"\b[A-Z][A-Z0-9]{1,9}\b")
-RE_GENE_TITLE = re.compile(r"\b[A-Z][a-z0-9]{1,9}\b")
+# 真基因符号的第 2 位必是小写字母（Trp53 / Gapdh / Actb）。
+# 早期写成 [A-Z][a-z0-9]{1,9}，于是 E402 这类「字母+数字」的
+# lint 码同时命中 UPPER 与 TITLE 两个正则，被判成"同一基因两种命名风格"。
+RE_GENE_TITLE = re.compile(r"\b[A-Z][a-z][A-Za-z0-9]{0,8}\b")
+
+# 全角标点（落在代码 token 里会让解释器直接报语法错）
+RE_FULLWIDTH_PUNCT = re.compile(
+    r"[\uff08\uff09\uff3b\uff3d\uff5b\uff5d\u3014\u3015"
+    r"\uff1b\uff1a\uff0c\uff1c\uff1e\uff1d\uff0b\uff0d\uff0a\uff0f]"
+)
+
+# UniProtKB accession 的官方形态：P04637 / Q9Y2X7 / A0A123 —— **必含数字**。
+# 早期版本这里是 [A-Z0-9]{2,8}_[A-Z]{2,6}，把 EXIT_OK / SKIP_DIRS / DEFAULT_UA
+# 这类「大写下划线常量」全部命中，那不是 accession 而是命名风格，纯误报。
+RE_UNIPROT_ACC = re.compile(
+    r"\b(?:[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2})\b"
+)
 
 # 占位符基因（没填真名就交付的信号）
 RE_PLACEHOLDER_GENE = re.compile(
@@ -212,12 +231,43 @@ MAX_FILE_BYTES = 2 * 1024 * 1024  # 单文件上限 2 MB，超出截断
 MAX_TARGETS = 400                 # 目录扫描文件数上限
 
 
-def _utf8():
-    for s in (sys.stdout, sys.stderr):
+def _code_only(text, path):
+    """剥掉注释与字符串字面量，只留下代码 token。返回 (code_text, exact)。
+
+    为什么必须剥：全角标点检查的意图是"这段代码照原样执行会报语法错"，
+    而注释与字符串里的全角标点**完全合法**（中文说明、中文提示语）。
+    不剥的话，任何带中文注释的脚本都必然 FAIL —— 恒红的检查等于没有信号，
+    和"无网必红"是同一类缺陷。
+
+    Python 用标准库 tokenize 精确切分；其它语言没有等价物，退化为保守的
+    行内剥离。tokenize 失败（语法不完整）时同样降级，但 exact=False
+    会告诉调用方"这不是精确结果"。
+    """
+    if path.lower().endswith(".py"):
         try:
-            s.reconfigure(encoding="utf-8")
-        except Exception:
+            parts = []
+            for t in tokenize.generate_tokens(io.StringIO(text).readline):
+                if t.type in (tokenize.COMMENT, tokenize.STRING,
+                              tokenize.NL, tokenize.NEWLINE,
+                              tokenize.INDENT, tokenize.DEDENT):
+                    continue
+                parts.append(t.string)
+            return " ".join(parts), True
+        except Exception:  # noqa: BLE001  语法不完整时降级，绝不因此放弃检查
             pass
+    return _strip_comments_heuristic(text), False
+
+
+def _strip_comments_heuristic(text):
+    """非 Python 语言的保守剥离：先去成对引号内容，再去 # 注释。"""
+    out = []
+    for line in text.splitlines():
+        line = re.sub(r"""["][^"\n]*["]|['][^'\n]*[']""", " ", line)
+        i = line.find("#")
+        if i >= 0:
+            line = line[:i]
+        out.append(line)
+    return "\n".join(out)
 
 
 def _match_label(text_lower, label):
@@ -275,8 +325,15 @@ def has_hedge(sentence):
 
 
 def r(path, text, status, detail, evidence=""):
-    """结果工厂：target 用 file:行号 的形式，便于定位。"""
-    return make_result(path, path, status, detail, evidence)
+    """结果工厂。
+
+    kind 先留空，由 run_checks() 按**发出它的检查器名**回填 ——
+    只有调用侧知道这批结果属于谁，检查器内部不必（也无法）重复声明。
+
+    历史缺陷：早期版本这里写的是 make_result(path, path, ...)，
+    于是 kind 字段被填成了文件路径，下游按检查器聚合全部失真。
+    """
+    return make_result("", path, status, detail, evidence)
 
 
 def line_of(text, pos):
@@ -359,20 +416,23 @@ def check_gene(path, text, kind, cfg):
                      "出现疑似占位符基因名（未填真实符号）",
                      "例：%s" % "、".join(sorted(set(ph))[:5])))
 
-    # 3.2 全角标点：**只在脚本里算错** —— 中文正文（.md/.txt）用全角标点是正常的
+    # 3.2 全角标点：**只在脚本里、且只在代码部分算错**。
+    #     中文正文（.md/.txt）用全角标点是正常的；脚本的注释与字符串里用也是正常的。
+    #     只有落在代码 token 里，解释器才会报语法错 —— 所以先剥再查。
     if kind == "script":
-        fw = sorted(set(re.findall(
-            r"[\uff08\uff09\uff3b\uff3d\uff5b\uff5d\u3014\u3015"
-            r"\uff1b\uff1a\uff0c\uff1c\uff1e\uff1d\uff0b\uff0d\uff0a\uff0f]", text)))
+        code, exact = _code_only(text, path)
+        fw = sorted(set(RE_FULLWIDTH_PUNCT.findall(code)))
         if fw:
             out.append(r(path, text, FAIL,
-                         "脚本含全角标点（R 会直接报语法错）",
-                         "例：%s ｜ 若仅出现在中文注释里可忽略" % "".join(fw[:10])))
+                         "脚本的代码部分含全角标点（解释器会报语法错）",
+                         "例：%s%s" % ("".join(fw[:10]),
+                                      "" if exact else " ｜ 已降级为启发式剥离，留意误报")))
 
-    if re.search(r"\b[A-Z0-9]{2,8}_[A-Z]{2,6}\b", text):
-        m = re.search(r"\b([A-Z0-9]{2,8}_[A-Z]{2,6})\b", text)
+    for m in list(RE_UNIPROT_ACC.finditer(text))[:3]:
         out.append(r(path, text, UNVERIFIED,
-                     "出现 UniProt 风格的 %s —— 它不是基因符号，别当 SYMBOL 用" % m.group(1)))
+                     "出现 UniProt accession %s —— 它是蛋白条目号，不是基因符号，别当 SYMBOL 用"
+                     % m.group(0),
+                     "位置：第 %d 行" % line_of(text, m.start())))
 
     return out
 
@@ -432,7 +492,35 @@ def check_id(path, text, kind, cfg):
     return out
 
 
-CALL_RE = re.compile(r"([A-Za-z_][A-Za-z0-9._]*)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)", re.S)
+# 函数调用头：name(...)。只负责定位到左括号，参数文本由下面手写配对取出。
+#
+# 为什么不用一条正则把参数也匹配掉：
+#   原来是 `([^()]*(?:\([^()]*\)[^()]*)*)` —— 嵌套量词，遇"很长且没有右括号"
+#   的文本会退化成 O(n²)。实测 20 万字符的单行把它拖到 120 秒超时
+#   （robustness_test 的边界用例抓到的真问题）。
+#   标识符长度也限到 64：`[A-Za-z0-9._]*` 贪婪吃掉长串后再逐字符回溯去试
+#   `\s*\(`，是同类 O(n²) 的另一个来源。
+CALL_HEAD_RE = re.compile(r"([A-Za-z_][A-Za-z0-9._]{0,63})\s*\(")
+CALL_MAX_ARGS = 4096   # 单次调用的参数文本上限，超过即不再做 organism 判定
+
+
+def iter_calls(text):
+    """产出 (函数名, 参数文本)。括号配对用手写扫描，整体线性。"""
+    for m in CALL_HEAD_RE.finditer(text):
+        i = m.end()
+        start = i
+        depth = 1
+        limit = min(len(text), start + CALL_MAX_ARGS)
+        while i < limit:
+            c = text[i]
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth == 0:
+                    yield m.group(1), text[start:i]
+                    break
+            i += 1
 
 
 def check_orgdb(path, text, kind, cfg):
@@ -457,9 +545,8 @@ def check_orgdb(path, text, kind, cfg):
                          "位置：第 %d 行" % line_of(text, m.start())))
 
     # 5.2 R 调用里的 organism= 语义（这是 cp_lint 查不出的：参数名合法但语义错）
-    for m in CALL_RE.finditer(text):
-        fn = m.group(1).split(".")[-1]
-        args = m.group(2)
+    for fn_raw, args in iter_calls(text):
+        fn = fn_raw.split(".")[-1]
         om = re.search(r"organism\s*=\s*[\"']([^\"']+)[\"']", args)
         if om:
             val = om.group(1).strip()
@@ -486,7 +573,10 @@ def check_stat(path, text, kind, cfg):
     out = []
     low = text.lower()
 
-    has_p = bool(re.search(r"\bp\s*(?:-?\s*value)?\s*[=<>]", low)) or ("p值" in low)
+    # 必须要求后面跟数字：否则源码里的 `p = ArgParser(...)`、`p.stdout`
+    # 都会被判成"报告了 p 值"。NUM_PATTERNS 一直是要求数字的，
+    # 两处口径此前不一致 —— 这是"代码被当成统计声明"的根因之一。
+    has_p = bool(re.search(r"\bp\s*(?:-?\s*value)?\s*[=<>]\s*[0-9]", low)) or ("p值" in low)
     has_padj = bool(re.search(r"\b(padj|p\.adj|p\.adjust|q\.?\s*value|fdr|adjusted\s*p)\b",
                               low)) or ("校正" in low or "多重检验" in low)
 
@@ -643,6 +733,56 @@ CHECK_NAMES = [c[0] for c in CHECKS]
 # 3. 目标收集与主流程
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# 相关性门：目录扫描时，只对"确实涉及生物医学"的文件跑检查
+# ---------------------------------------------------------------------------
+# 为什么需要：本模块的基因/物种规则是为**文本报告**设计的。拿它去扫普通工程
+# 脚本时，BLE001（noqa 码）、MIT（许可证名）、SPDX、EXIT_OK 这些源码标识符
+# 会被当成基因符号 —— 几十条假红把真问题全淹掉，闸门失去信号价值。
+#
+# 安全方向（重要）：判"相关"只会多跑几个检查器（最坏是多几条误报）；
+# 判"不相关"会**静默跳过**（漏检风险）。所以信号表刻意取得宽，
+# 只有明确不沾边的文件才会被滤掉。
+#
+# 生效范围：**只对 --root 批量扫描生效**。用户用 --file 显式点名某个文件，
+# 说明他知道自己在查什么，一律强制全查，不走这道门 —— 免得它变成放行通道。
+BIO_SIGNALS = [
+    # 物种名（中文 / 英文 / 拉丁）
+    "homo sapiens", "mus musculus", "rattus norvegicus", "danio rerio",
+    "drosophila", "caenorhabditis", "人类", "小鼠", "大鼠", "斑马鱼",
+    "果蝇", "线虫", "人源", "鼠源",
+    # 生信库 / 工具 / 数据库对象
+    "clusterprofiler", "org.hs.eg.db", "org.mm.eg.db", "orgdb", "ensembldb",
+    "deseq2", "edger", "limma", "seurat", "scanpy", "bioconductor",
+    "enrichkegg", "enrichgo", "gsego", "gsekegg", "mkegg", "reactome",
+    "cellranger", "kallisto", "featurecounts", "samtools", "bcftools",
+    "plink", "msigdb", "uniprot", "refseq", "ncbi", "entrez", "mirbase",
+    "kegg", "ensembl", "genbank", "tcga", "gtex",
+    "gwas", "mendelian", "多效性", "孟德尔", "qtl", "snv", "indel",
+    "polygenic", "allele", "等位基因", "hla", "连锁不平衡",
+    # 生信 ID 形态（用小写片段匹配，故不写全大写的规范形式）
+    "ensg", "ensmusg", "ensrnog", "ensdarg", "fbgn", "wbgene",
+    "hsa_", "mmu_", "rno_", "wp0", "go:",
+    # 数据格式与组学术语
+    "fastq", "fasta", "vcf", "bam ", "gtf", "gff", "counts matrix",
+    "rna-seq", "scrna", "atac-seq", "chip-seq",
+    "转录组", "单细胞", "差异表达", "富集分析", "测序", "表达矩阵",
+    "基因", "蛋白", "通路", "样本分组",
+    "logfc", "fold change", "padj", "batch effect", "differential expression",
+    "enrichment", "pathway", "transcriptom", "genom", "phenotyp",
+]
+
+
+def is_bio_relevant(text_lower):
+    """文件是否涉及生物医学实体。判否 → 跳过（不产出 pass，也不算 fail）。
+
+    维护约定：**只加信号，不删信号**。漏判（才）会静默放过；
+    多判最坏只是多几条可人工忽略的提示。新增信号请一并想清楚
+    它在普通工程文档里的误命中面。
+    """
+    return any(sig in text_lower for sig in BIO_SIGNALS)
+
+
 def guess_kind(path, hint):
     if hint != "auto":
         return hint
@@ -659,6 +799,27 @@ def read_text(path):
         return None
 
 
+def is_excluded(rel, fn, excludes):
+    """判断 rel 是否命中排除规则。
+
+    三档匹配，从窄到宽：
+      1. fnmatch(rel, pat) —— 支持 `references/*.md` 这类 glob
+      2. fnmatch(fn, pat)  —— 支持 `*.tmp` 这类纯文件名
+      3. 目录前缀 —— 支持直接写目录名 `references` / `references/`
+
+    第 3 档是后补的：此前只写目录名时 fnmatch 一条都匹配不上，
+    "排除了"和"没排除"看起来一模一样（静默失效），
+    用户会拿到一屏假红却不知道排除根本没生效。
+    """
+    for pat in excludes:
+        if fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(fn, pat):
+            return True
+        d = pat.rstrip("/")
+        if d and (rel == d or rel.startswith(d + "/")):
+            return True
+    return False
+
+
 def walk_root(root, excludes=()):
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -666,7 +827,7 @@ def walk_root(root, excludes=()):
         for fn in filenames:
             full = os.path.join(dirpath, fn)
             rel = os.path.relpath(full, root).replace(os.sep, "/")
-            if any(fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(fn, pat) for pat in excludes):
+            if is_excluded(rel, fn, excludes):
                 continue
             ext = os.path.splitext(fn)[1].lower()
             if ext in SCAN_EXT:
@@ -677,7 +838,7 @@ def walk_root(root, excludes=()):
 
 
 def main(argv=None):
-    _utf8()
+    _force_utf8()
     argv = list(sys.argv[1:] if argv is None else argv)
 
     parser = ArgParser(
@@ -689,11 +850,18 @@ def main(argv=None):
     parser.add_argument("--root", help="扫描目录（递归，跳过 .git/node_modules 等）")
     parser.add_argument("--exclude", action="append", default=[],
                         metavar="GLOB",
-                        help="扫描时排除的路径（glob，可重复；只对 --root 生效）。"
+                        help="扫描时排除的路径（可重复；只对 --root 生效）。"
+                             "支持 glob（如 references/*.md），也支持直接写目录名"
+                             "（如 references，含其下全部文件）。"
                              "**教学 / 规范类文档必须排除**：它们成篇都是故意写错的示例，"
                              "扫了只会得到一屏假红，反而把真问题淹掉")
     parser.add_argument("--kind", choices=["auto", "report", "script"], default="auto",
                         help="文件类型；auto 按扩展名推断")
+    parser.add_argument("--no-relevance-gate", action="store_true",
+                        help="关闭相关性门，对所有目标强制跑检查。默认只查涉及"
+                             "生物医学实体的文件：对普通工程脚本跑生信检查时，"
+                             "EXIT_OK / MIT / SPDX 这类标识符会被误判成基因符号，"
+                             "几十条假红把真问题全淹掉")
     parser.add_argument("--only", help="只跑指定检查器，逗号分隔：" + ",".join(CHECK_NAMES))
     parser.add_argument("--offline", action="store_true", help="跳过需要联网的项")
     parser.add_argument("--strict", action="store_true",
@@ -735,9 +903,19 @@ def main(argv=None):
 
     results = []
     scanned = []
+    skipped = []
+    # 相关性门默认对所有目标生效（含 --file）：
+    # 对一份没有生物医学内容的文件跑生信检查，答案是"不适用"而不是"通过"，
+    # 报出来只会是噪音。两个例外：
+    #   --no-relevance-gate  显式要求全查
+    #   --only <检查器>      用户已明确指定查什么，不再替他判断相关性
+    gate_on = not args.no_relevance_gate and not only
     for path in targets:
         text = read_text(path)
         if text is None:
+            continue
+        if gate_on and not is_bio_relevant(text.lower()):
+            skipped.append(path)
             continue
         scanned.append(path)
         kind = guess_kind(path, args.kind)
@@ -745,7 +923,10 @@ def main(argv=None):
             if only and name not in only:
                 continue
             try:
-                results.extend(fn(path, text, kind, cfg) or [])
+                items = fn(path, text, kind, cfg) or []
+                for it in items:
+                    it["kind"] = name   # 回填检查器名，见 r() 的说明
+                results.extend(items)
             except Exception as e:  # noqa: BLE001
                 # 检查器自身出错 → 记为未验证（fail-closed），绝不当通过
                 results.append(make_result(name, path, UNVERIFIED,
@@ -759,10 +940,15 @@ def main(argv=None):
 
     summary = summarize(results)
     code = exit_code_for(results)
+    # 一个文件都没扫到（全被相关性门滤掉）→ 不许报"通过"。
+    # 没查过 != 没问题 —— 这是本套件最基本的 fail-closed 纪律。
+    if not scanned and skipped:
+        code = EXIT_UNVERIFIED
 
     doc = {
         "mode": "bio",
         "scanned": scanned,
+        "skipped_irrelevant": skipped,
         "checks_run": (only or CHECK_NAMES),
         "summary": summary,
         "results": results,
@@ -778,6 +964,12 @@ def main(argv=None):
         if item.get("evidence"):
             human.append("           ↳ %s" % str(item["evidence"])[:160])
     human.append("")
+    if skipped:
+        human.append("相关性门跳过 %d 个非生物医学文件（要全查加 --no-relevance-gate）"
+                     % len(skipped))
+    if not scanned and skipped:
+        human.append(">>> 没有扫到任何生物医学文件：本次**未做核查**，"
+                     "记为未验证，不能当通过。")
     human.append("扫描 %d 个文件 ｜ 总 %d ｜ 通过 %d ｜ 失败 %d ｜ 待确认 %d" % (
         len(scanned), summary["total"], summary["pass"], summary["fail"],
         summary["unverified"]))
