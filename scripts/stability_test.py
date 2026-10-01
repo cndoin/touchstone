@@ -417,7 +417,7 @@ def group_g(installed):
             s, t = os.path.join(dirpath, f), os.path.join(troo, f)
             if not os.path.exists(t) or not filecmp.cmp(s, t, shallow=False):
                 diff.append(os.path.join(rel, f))
-    rec("G", "安装目录与工作区逐字节一致", not diff, "; ".join(diff[:8]))
+    rec("G", "安装目录与工作区逐字节一致", not diff, _brief(diff))
 
     rc, out, err = run([os.path.join(installed, "scripts", "selftest.py")])
     rec("G", "从安装目录跑 selftest 通过", rc == 0, "rc=%s" % rc)
@@ -540,6 +540,18 @@ def _json_total(script):
         return None
 
 
+def _brief(items, cap=8):
+    """把明细列表压成一行。
+
+    **截断必须显式标注还剩几条** —— 静默丢掉后面的明细，会让排障的人
+    以为问题只有那么多（本轮就是这么漏掉 CHANGELOG 那几条的：前 8 条
+    正好被 README/CONTRIBUTING 占满）。
+    """
+    if len(items) <= cap:
+        return "; ".join(items)
+    return "%s; …另有 %d 条未显示" % ("; ".join(items[:cap]), len(items) - cap)
+
+
 def group_h():
     # 本组只 rec 一条，所以「含本组的总条数」= 已有条数 + 1
     self_total = len(results) + 1
@@ -588,7 +600,7 @@ def group_h():
                 if got != want[key]:
                     bad.append("%s：%s 文档写 %d，实测 %d" % (rel, key, got, want[key]))
 
-    rec("H", "文档里的测试条数与实测一致", not bad, "; ".join(bad[:8]))
+    rec("H", "文档里的测试条数与实测一致", not bad, _brief(bad))
 
 
 def main(argv=None):
