@@ -367,6 +367,65 @@ def main(argv=None):
         os.path.exists(lg_marker), True, os.path.exists(lg_marker),
         "marker=%s" % lg_marker))
 
+    # --- v4.3 新增：生物医学模式声明核查（19-bio-mode / bio_guard.py）-----
+    # 设计要点：**合规样本必须零告警**（会吵的闸门一定被绕过）；
+    # 坏样本必须覆盖「沉默型」幻觉 —— KEGG 传学名、注释库与物种不配这两类，
+    # cp_lint 会放行（参数名合法）、R 也不报错（静默返回空集），只能在这里拦。
+    bg = os.path.join(HERE, "bio_guard.py")
+    if os.path.exists(bg):
+        bio = os.path.join(tmp, "bio")
+        os.makedirs(bio, exist_ok=True)
+
+        good_bio = os.path.join(bio, "good.md")
+        with open(good_bio, "w", encoding="utf-8") as f:
+            f.write(
+                "# 分析报告\n\n"
+                "物种：人类（Homo sapiens，GRCh38），基因符号按 HGNC 规范书写。\n"
+                "校正方法为 Benjamini-Hochberg，报告 padj 与 log2FC（以 2 为底）。\n"
+                "TP53（padj = 1.2e-05, log2FC = 2.31）显著上调。\n"
+                "结论：TP53 与增殖表型相关，可能参与细胞周期调控，\n"
+                "因果关系需孟德尔随机化进一步验证。\n"
+                "本结论基于 TCGA-LUAD 队列（n = 512）的人肺腺癌组织，不适用于其他癌种。\n")
+        case("bio_guard 合规报告零告警（不误报）", [bg, "--file", good_bio, "--offline"], 0)
+
+        bad_bio = os.path.join(bio, "bad.md")
+        with open(bad_bio, "w", encoding="utf-8") as f:
+            f.write(
+                "# 分析报告\n\n"
+                "我们在小鼠模型中敲除了 TP53，发现 MT-ND1 上调。\n"
+                "使用 org.Hs.eg.db 注释，富集到 hsa04115 通路。\n"
+                "p < 0.05，logFC = 1.5。\n"
+                "该结果证明了 TP53 导致肿瘤发生。\n"
+                "GENE1 也上调。\n"
+                "采用 t 检验分析 5000 个细胞。\n"
+                "参考文献：PMID: 123\n")
+        case("bio_guard 坏报告被拦（物种/注释库/口径/外推/文献）",
+             [bg, "--file", bad_bio, "--offline"], 1)
+
+        bad_r = os.path.join(bio, "bad.R")
+        with open(bad_r, "w", encoding="utf-8") as f:
+            f.write('library(clusterProfiler)\n'
+                    'ego <- enrichKEGG(gene = entrez, organism = "Homo sapiens")\n'
+                    'ego2 <- enrichWP(gene = entrez, organism = "hsa")\n'
+                    'obj <- RunUMAP(obj, dims = 1:30)\n')
+        case("bio_guard 脚本 organism 语义错误（cp_lint 放行的那一类）",
+             [bg, "--file", bad_r, "--offline"], 1)
+
+        cite_bio = os.path.join(bio, "cite.md")
+        with open(cite_bio, "w", encoding="utf-8") as f:
+            f.write("# 参考\nPMID: 34567890\nDOI: 10.1038/s41586-024-07500-0\n")
+        case("bio_guard 合法 PMID/DOI 不误判（离线）",
+             [bg, "--file", cite_bio, "--only", "citation", "--offline"], 0)
+
+        case("bio_guard 目录不存在 → 用法错误",
+             [bg, "--root", os.path.join(tmp, "no-such-dir"), "--offline"], 3)
+        case("bio_guard 无目标 → 用法错误", [bg, "--offline"], 3)
+        case("bio_guard 未知检查器 → 用法错误",
+             [bg, "--file", good_bio, "--only", "not-a-check", "--offline"], 3)
+        # --strict：格式合法但需人工确认的项，在严格模式下按失败计
+        case("bio_guard --strict 将待确认项计为失败",
+             [bg, "--file", cite_bio, "--only", "citation", "--strict"], 1)
+
     passed = sum(1 for r in results if r.ok)
     failed = len(results) - passed
 
