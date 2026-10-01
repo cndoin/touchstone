@@ -99,13 +99,25 @@ MANIFEST_BY_ECO = {
 }
 
 # 标准库 / 内置模块：不参与幻影依赖判定
-PY_STDLIB = {
+#
+# **必须动态取**（Python 3.10+ 有 sys.stdlib_module_names），手写清单只作兜底：
+# 手写清单一定会漏（实测漏了 difflib / fnmatch / sqlite3 / statistics …），
+# 漏掉的项会被当成第三方包去查 registry，离线时全部变成 UNVERIFIED ——
+# 结果是本工具在任何无网环境下"必红"，闸门红得太多就等于没有信号。
+_PY_STDLIB_FALLBACK = {
     "os", "sys", "json", "re", "time", "math", "io", "abc", "enum", "copy", "typing",
     "pathlib", "dataclasses", "itertools", "functools", "collections", "subprocess",
     "asyncio", "logging", "hashlib", "random", "string", "textwrap", "unittest",
     "datetime", "urllib", "http", "socket", "threading", "uuid", "csv", "argparse",
     "contextlib", "shutil", "tempfile", "warnings", "traceback", "inspect", "importlib",
 }
+
+
+def _build_py_stdlib():
+    return set(getattr(sys, "stdlib_module_names", ()) or ()) | _PY_STDLIB_FALLBACK
+
+
+PY_STDLIB = _build_py_stdlib()
 NODE_BUILTINS = {
     "fs", "path", "http", "https", "os", "util", "crypto", "events", "stream", "buffer",
     "url", "child_process", "net", "dns", "zlib", "querystring", "timers", "assert",
@@ -255,6 +267,27 @@ def extract_imports(path):
                     out.append((mod, lang, i))
                 break
     return out
+
+
+def collect_local_modules(root):
+    """项目内存在的顶层模块名（用于识别裸 import 的本地模块，如 `import _common`）。
+
+    Python 的 import 语义是**本地优先**（同目录 / sys.path 靠前者先命中），
+    所以 `import _common` 命中 scripts/_common.py 时，把它送去查 PyPI 是错的 ——
+    离线环境会把整套脚本的每一个内部导入都标成 UNVERIFIED。
+    """
+    mods = set()
+    if not root or not os.path.isdir(root):
+        return mods
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+        for fn in filenames:
+            if fn.endswith(".py"):
+                mods.add(fn[:-3])
+        for d in dirnames:
+            if os.path.exists(os.path.join(dirpath, d, "__init__.py")):
+                mods.add(d)
+    return mods
 
 
 def is_internal(mod):
@@ -448,6 +481,7 @@ def analyze(root, files=None, cfg=None):
     cfg = cfg or {}
     declared, manifests = load_manifest(root)
     findings = []
+    local_mods = collect_local_modules(root)
 
     scanned = 0
     for path in iter_files(root, files):
@@ -466,9 +500,24 @@ def analyze(root, files=None, cfg=None):
             pkg = norm_pkg(mod)
             eco = ECO_BY_LANG.get(lang)
 
+            # Python 标准库按**顶层名**判定：urllib.error / xml.etree 都是标准库，
+            # 只比全名会把它们漏成"第三方包"
+            py_root = pkg.split(".")[0] if lang == "python" else pkg
+
             # 标准库 / 内置模块不参与幻影依赖判定
-            if (lang == "python" and pkg in PY_STDLIB) or \
+            if (lang == "python" and py_root in PY_STDLIB) or \
                (lang == "js" and (pkg in NODE_BUILTINS or pkg.startswith("node:"))):
+                continue
+
+            # Python 项目内的裸模块（如 scripts/_common.py 被 `import _common`）：
+            # 本地优先是 import 语义，送到 registry 去查属于误判
+            if lang == "python" and py_root in local_mods:
+                resolved = resolve_internal(root, path, py_root)
+                if not resolved:
+                    findings.append({
+                        "level": BLOCK, "kind": "missing_path", "file": rel, "line": lineno,
+                        "module": mod, "detail": "本地模块名存在但解析不到文件（import 与文件名不匹配）",
+                    })
                 continue
 
             # 该生态 manifest 存在时，未在 manifest 中声明 = 幻影依赖
