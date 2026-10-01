@@ -6,6 +6,59 @@
 
 ---
 
+## v4.3.0（2026-10-01）· 生物医学模式 + dep_guard 离线必红修复
+
+**MINOR：新增一个专项模式与一个闸门脚本，并修掉一个让既有闸门失去信号价值的缺陷。**
+
+### 背景（问题是什么）
+
+专项模式此前覆盖了编码（`08-code-mode`）与数学（`18-math-mode`），但**生物医学分析**没有对应档位 ——
+而这一域的幻觉面跟前两者都不同：
+
+- 本机已有的三套生信技能（`clusterprofiler-skill` / `seurat-sc` / `mr-agent`）
+  各自的事实底座都只拦 **API 层**（函数名、参数名）。但
+  `enrichKEGG(organism="Homo sapiens")` 这类调用**参数名合法、类型合法**，R 也不报错——
+  后果是静默返回空集。**lint 放行、运行时也不红，属于纯盲区。**
+- 物种-基因命名（人 `TP53` / 鼠 `Trp53`）、ID 体系（`ENSG` vs `ENSMUSG`）、
+  统计口径（`p` vs `padj`、logFC 底数、伪重复）、结论外推（相关→因果、小鼠→人）
+  这一整片，既没有工具也没有条款。
+
+同时实测发现一个**既有闸门的失效**：`dep_guard.py` 用**手写清单**判定 Python 标准库，
+清单漏了 `difflib` / `fnmatch` 等；且不识别项目内的裸模块（`import _common`）。
+后果是离线环境下**每一个内部导入都被标成 UNVERIFIED** —— 任何无网机器上
+`pipeline.py` 都必红（退出码 2）。**闸门红得太多，就等于没有信号。**
+
+### 改了什么
+
+1. **新增 `references/19-bio-mode.md`** —— 生物医学模式：八类幻觉分层
+   （API / 生物实体 / ID 体系 / 注释术语 / 统计口径 / 数值 / 结论边界 / 文献）× 三种治法，
+   含物种锁与各物种命名规范表、ID 与注释库配对表、口径三连、伪重复、外推三闸、
+   适用范围模板，以及**与三套生信技能的分工表**（避免重复造轮子）。
+2. **新增 `scripts/bio_guard.py`** —— 八个检查器（`species` / `gene` / `id` / `orgdb` /
+   `stat` / `numeric` / `overclaim` / `citation`）。零依赖、离线可用、fail-closed，
+   stdout 只出 JSON，退出码沿用套件约定（0/1/2/3）。
+3. **`SKILL.md`**：新增「生物医学模式」章节；description 补入生信触发条件；
+   红线清单补入基因 / 物种 / ID / 口径 / PMID；闸门清单与参考文件表同步。
+4. **`scripts/dep_guard.py`**：标准库改由 `sys.stdlib_module_names` 动态取
+   （手写清单仅作兜底），并按**顶层名**判定（`urllib.error` 是标准库）；
+   新增 `collect_local_modules()` 识别项目内裸模块。修后离线全量为 `BLOCK=0 UNVERIFIED=0`。
+5. **`scripts/selftest.py`**：新增 8 条 `bio_guard` 用例，
+   同时覆盖"合规样本零误报"与"沉默型幻觉必被拦"两侧。
+
+### 影响范围
+
+- 新增文件，不改动既有输出契约，不改动既有退出码语义。
+- `dep_guard` 的行为变化：**离线环境下不再产生假红**。已装项目升级后
+  `pipeline.py` / `dep_guard` 的退出码可能由 2 变 0 —— 这是修复，不是回归。
+- `bio_guard.py` 只判"格式与口径"，**不判科学性**：基因是否真实存在、
+  通路 ID 与名称是否对应，仍需数据库或 `hardcheck.py`。
+
+### 验证
+
+`selftest.py` 88/88、`robustness_test.py` 70/70、`stability_test.py` 101/101 全绿。
+
+---
+
 ## v4.2.1（2026-09-24）· 安全修复：删除仓库内命令的执行路径（RCE）
 
 **PATCH：纯缺陷修复。** 未增删接口，未改动任何**由人传入**的命令执行语义。

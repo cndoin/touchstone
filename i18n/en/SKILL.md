@@ -2,7 +2,7 @@
 name: touchstone
 description: Touchstone · anti-hallucination engineering kit (a touchstone is a stone for assaying gold; formerly named dehallucination). **Use ONLY when at least one of these holds:** (1) the output must cite externally decidable facts — URLs, DOIs, papers, legal clauses, API signatures, version numbers, package names, file paths, command output; (2) the domain is high-stakes or irreversible — legal, medical, financial, public release, production operations; (3) it is a large long-running project — multi-session, huge codebase, many subagents — where errors compound; (4) the user explicitly asks for verification — "does this really exist", "verify this", "don't make things up", "is this API/paper/file real", "are you sure it's finished"; (5) the output will be adopted without human review, or the user has stated a position and sycophancy is a risk; (6) **the output contains numeric or symbolic conclusions that will be adopted** — money, tax rates, schedules, capacity, ratios, financial or statistical bases, formula derivations, engineering parameters, or reproducing numbers from a paper (mental arithmetic, wrong bases, and under-specified problems all fall here). **Do NOT load this kit for:** chit-chat, creative writing, formatting tweaks, small single-file edits, small local refactors that run locally, explaining code, one-off quick questions, or a single-point arithmetic question ("what is 3 squared") — these have no externally decidable facts, are reversible and internal; just answer directly. Loading the kit only slows things down and burns tokens.
 license: MIT
-version: 4.2.1
+version: 4.3.0
 ---
 
 # Touchstone · Anti-Hallucination Engineering Kit
