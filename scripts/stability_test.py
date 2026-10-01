@@ -5,7 +5,7 @@
 
 与另外两个测试脚本的分工：
 
-  - selftest.py        = 快速冒烟（38 项，正常路径 + 关键失败路径），秒级
+  - selftest.py        = 快速冒烟（92 项，正常路径 + 关键失败路径），秒级
   - robustness_test.py = 深度健壮性（70 项，边界 / 异常 / 编码 / 性能 / 幂等）
   - **stability_test.py = 工程一致性**（编译 / 幂等 / 并发 / fuzz / 环境 /
                          文档与版本一致性 / 资产合法性 / 安装目录同步）
@@ -19,7 +19,7 @@
   2. 同样输入跑 N 次结果完全一致；并发写不产出损坏 JSON
   3. 垃圾输入 / 垃圾 stdin 下不出现 Traceback
   4. 非 UTF-8 环境、离线、只读目录、非 ASCII 路径都不崩
-  5. 文档与代码不脱节（版本号、铁律条数、引用的文件路径）
+  5. 文档与代码不脱节（版本号、铁律条数、测试条数、引用的文件路径）
   6. 工作区与安装目录逐字节一致（忘了同步就报警）
 
 用法：
@@ -423,6 +423,174 @@ def group_g(installed):
     rec("G", "从安装目录跑 selftest 通过", rc == 0, "rc=%s" % rc)
 
 
+# ---------------------------------------------------------------------------
+# H · 测试条数一致性
+#
+# 「文档里写的条数」是最容易悄悄烂掉的东西：加了用例忘了改文档，
+# 读者照着文档去数就对不上。这一组把条数声明登记成表，运行时跑一遍
+# 另两套测试取**实测值**，再逐条比对。
+#
+# 只登记**格式明确**的声明位置（与上面「铁律条数」的检查同理：靠格式锚定，
+# 不做全文猜数字 —— 全文猜会把 "600 条" 之类无关数字一起卷进来）。
+# 文档换了新写法要在这里补一条；反过来，**登记了却匹配不到任何文本会判失败**，
+# 这样规则不会悄悄失效（比漏登记的危害小得多）。
+# ---------------------------------------------------------------------------
+
+# group_g() 里 rec 的条数；改了那边要同步改这里
+G_ITEMS = 2
+
+# 这些文件只校验**当前**版本条目，历史条目按当时的事实保留，不参与比对。
+HEAD_ONLY = {"CHANGELOG.md"}
+
+# (相对路径, 正则, 捕获组依次对应的键)
+# 键取值：selftest / robustness / stability（本地口径）/ stability_ci（--no-install-check 口径）
+COUNT_RULES = [
+    # README：命令注释 + 测试分工表 + 目录树
+    ("README.md", r"快速自检（(\d+) 条", ("selftest",)),
+    ("README.md", r"深度健壮性测试（(\d+) 条", ("robustness",)),
+    ("README.md", r"工程一致性 / 稳定性测试（(\d+) 条", ("stability",)),
+    ("README.md", r"工程一致性测试（(\d+) 条", ("stability",)),
+    ("README.md", r"\|\s*用例\s*\|\s*(\d+) 条\s*\|\s*(\d+) 条\s*\|\s*(\d+) 条"
+                   r"（`--no-install-check` 时 (\d+) 条）",
+     ("selftest", "robustness", "stability", "stability_ci")),
+    ("README.md", r"自动降级为 (\d+) 条", ("stability_ci",)),
+    ("README.md", r"\*\*(\d+) 条是本地完整模式的数字，(\d+) 条不是",
+     ("stability", "stability_ci")),
+    # CONTRIBUTING：开发流程里的命令注释 + 下面那段 G 组说明
+    ("CONTRIBUTING.md", r"selftest\.py\s+#\s*快速冒烟（(\d+) 条", ("selftest",)),
+    ("CONTRIBUTING.md", r"robustness_test\.py\s+#\s*深度健壮性（(\d+) 条", ("robustness",)),
+    ("CONTRIBUTING.md", r"stability_test\.py\s+#\s*工程一致性（(\d+) 条", ("stability",)),
+    ("CONTRIBUTING.md", r"此时是 \*\*(\d+) 条\*\*", ("stability_ci",)),
+    ("CONTRIBUTING.md", r"\*\*不是 (\d+) 条少了两条测试", ("stability",)),
+    ("CONTRIBUTING.md", r"CI 跑的就是 (\d+) 条", ("stability_ci",)),
+    # references/15：分工表 + 代码块
+    ("references/15-stability-performance.md",
+     r"\|\s*用例\s*\|\s*(\d+) 条\s*\|\s*(\d+) 条\s*\|\s*(\d+) 条\s*\|",
+     ("selftest", "robustness", "stability")),
+    ("references/15-stability-performance.md",
+     r"selftest\.py\s+#\s*秒级冒烟（(\d+) 条", ("selftest",)),
+    ("references/15-stability-performance.md",
+     r"robustness_test\.py\s+#\s*深度：(\d+) 条", ("robustness",)),
+    ("references/15-stability-performance.md",
+     r"stability_test\.py\s+#\s*工程一致性：(\d+) 条", ("stability",)),
+    # SKILL.md：自检命令块
+    ("SKILL.md", r"selftest\.py\s+#\s*(\d+) 条快速冒烟", ("selftest",)),
+    ("SKILL.md", r"robustness_test\.py\s+#\s*(\d+) 条深度", ("robustness",)),
+    ("SKILL.md", r"stability_test\.py\s+#\s*(\d+) 条工程一致性", ("stability",)),
+    # 仓库自带 CI 与可直接复制的 CI 片段
+    (".github/workflows/ci.yml", r"快速冒烟（(\d+) 条", ("selftest",)),
+    (".github/workflows/ci.yml", r"深度健壮性（(\d+) 条", ("robustness",)),
+    (".github/workflows/ci.yml", r"工程一致性（本地 (\d+) 条；CI 里 (\d+) 条）",
+     ("stability", "stability_ci")),
+    (".github/workflows/ci.yml", r"整体跳过 → (\d+) 条", ("stability_ci",)),
+    ("assets/ci/github-actions.yml", r"快速冒烟（(\d+) 条", ("selftest",)),
+    ("assets/ci/github-actions.yml", r"深度健壮性（(\d+) 条", ("robustness",)),
+    # 这个片段是给 CI 用的（带 --no-install-check），所以登记成 CI 口径
+    ("assets/ci/github-actions.yml", r"工程一致性（(\d+) 条", ("stability_ci",)),
+    # README：快速开始末尾的「应输出 N/N 通过」
+    ("README.md", r"应输出 (\d+)/(\d+) 通过", ("selftest", "selftest")),
+    # 英文文档是平行副本（RELEASE.md 要求与中文版对齐），漏改一处这里会点出来
+    ("README.en.md", r"selftest\.py[^\n]*?(\d+) smoke cases", ("selftest",)),
+    ("README.en.md",
+     r"stability_test\.py[^\n]*?(\d+) engineering-consistency cases \((\d+) with",
+     ("stability", "stability_ci")),
+    ("README.en.md", r"stability_test\.py[^\n]*?(\d+) engineering-consistency cases",
+     ("stability",)),
+    ("README.en.md", r"expects (\d+)/(\d+)", ("selftest", "selftest")),
+    ("README.en.md",
+     r"\|\s*Cases\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+) \((\d+) with",
+     ("selftest", "robustness", "stability", "stability_ci")),
+    ("README.en.md", r"degrades to (\d+) cases", ("stability_ci",)),
+    ("README.en.md", r"\*\*(\d+) is the full local number; (\d+) does not mean",
+     ("stability", "stability_ci")),
+    ("README.en.md", r"\*\*(\d+)/(\d+), (\d+)/(\d+), and (\d+)/(\d+) passing\*\*",
+     ("selftest", "selftest", "robustness", "robustness", "stability", "stability")),
+    ("i18n/en/SKILL.md", r"selftest\.py[^\n]*?(\d+) smoke cases", ("selftest",)),
+    ("i18n/en/SKILL.md", r"stability_test\.py[^\n]*?(\d+) engineering-consistency",
+     ("stability",)),
+    # RELEASE.md 发版前检查清单（形如 38/38）
+    ("RELEASE.md", r"selftest\.py\s+#\s*(\d+)/(\d+)", ("selftest", "selftest")),
+    ("RELEASE.md", r"robustness_test\.py\s+#\s*(\d+)/(\d+)", ("robustness", "robustness")),
+    ("RELEASE.md", r"stability_test\.py\s+#\s*(\d+)/(\d+)", ("stability", "stability")),
+    # CHANGELOG 只校验顶部当前条目（历史条目按当时事实保留）
+    ("CHANGELOG.md", r"`selftest\.py`[^\n]{0,60}?(\d+)/(\d+)", ("selftest", "selftest")),
+    ("CHANGELOG.md", r"`robustness_test\.py`[^\n]{0,60}?(\d+)/(\d+)",
+     ("robustness", "robustness")),
+    ("CHANGELOG.md", r"`stability_test\.py`[^\n]{0,60}?(\d+)/(\d+)",
+     ("stability", "stability")),
+]
+
+
+def _json_total(script):
+    """跑一次 <script> --json 取 total（实测条数）；取不到返回 None。
+
+    不假设退出码：用例失败时脚本仍会输出 JSON，条数照样可用。
+    有失败用例时 stdout 里会先出现若干行 `FAIL [...]`（rec 直接写 stdout），
+    所以从第一个行首 `{` 开始截，而不是傻读整段。
+    """
+    rc, out, err = run([os.path.join(HERE, script), "--json"], timeout=900)
+    if rc == "TIMEOUT":
+        return None
+    m = re.search(r"^\{", out, re.M)
+    if m:
+        out = out[m.start():]
+    try:
+        return int(json.loads(out).get("total"))
+    except Exception:
+        return None
+
+
+def group_h():
+    # 本组只 rec 一条，所以「含本组的总条数」= 已有条数 + 1
+    self_total = len(results) + 1
+    g_count = sum(1 for g, _n, _ok, _d in results if g == "G")
+    if g_count == G_ITEMS:
+        local_total, ci_total = self_total, self_total - G_ITEMS
+    elif g_count == 0:
+        # G 组被 --no-install-check 或缺少安装目录整体跳过了
+        local_total, ci_total = self_total + G_ITEMS, self_total
+    else:
+        rec("H", "文档里的测试条数与实测一致", False,
+            "G 组条数异常（%d），无法推算 CI 口径" % g_count)
+        return
+
+    want = {
+        "selftest": _json_total("selftest.py"),
+        "robustness": _json_total("robustness_test.py"),
+        "stability": local_total,
+        "stability_ci": ci_total,
+    }
+
+    bad = []
+    for key in ("selftest", "robustness"):
+        if want[key] is None:
+            bad.append("%s --json 没取到 total（实测值缺失）" % key)
+
+    for rel, pat, keys in COUNT_RULES:
+        try:
+            text = open(os.path.join(ROOT, rel), encoding="utf-8").read()
+        except Exception as ex:
+            bad.append("%s 读不到：%s" % (rel, ex))
+            continue
+        if rel in HEAD_ONLY:
+            # 只留第一个版本条目（第一个 `## ` 到第二个 `## ` 之间）
+            parts = re.split(r"^##\s", text, flags=re.M)
+            text = parts[1] if len(parts) > 1 else ""
+        hits = list(re.finditer(pat, text))
+        if not hits:
+            bad.append("%s 规则失配（%s）——文档写法变了？" % (rel, pat))
+            continue
+        for m in hits:
+            for i, key in enumerate(keys, start=1):
+                if want[key] is None:
+                    continue
+                got = int(m.group(i))
+                if got != want[key]:
+                    bad.append("%s：%s 文档写 %d，实测 %d" % (rel, key, got, want[key]))
+
+    rec("H", "文档里的测试条数与实测一致", not bad, "; ".join(bad[:8]))
+
+
 def main(argv=None):
     global tmp
     _force_utf8()
@@ -458,6 +626,7 @@ def main(argv=None):
             group_g(installed)
         else:
             sys.stdout.write("SKIP [G] 安装目录检查（--no-install-check）\n")
+        group_h()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

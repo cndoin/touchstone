@@ -6,9 +6,10 @@
 
 ---
 
-## v4.3.0（2026-10-01）· 生物医学模式 + dep_guard 离线必红修复
+## v4.3.0（2026-10-01）· 生物医学模式 + 文档条数门禁 + dep_guard 离线必红修复
 
-**MINOR：新增一个专项模式与一个闸门脚本，并修掉一个让既有闸门失去信号价值的缺陷。**
+**MINOR：新增一个专项模式与一个闸门脚本、给测试套件补上一道门禁，
+并修掉一个让既有闸门失去信号价值的缺陷。**
 
 ### 背景（问题是什么）
 
@@ -47,6 +48,15 @@
    新增 `collect_local_modules()` 识别项目内裸模块。修后离线全量为 `BLOCK=0 UNVERIFIED=0`。
 5. **`scripts/selftest.py`**：新增 8 条 `bio_guard` 用例，
    同时覆盖"合规样本零误报"与"沉默型幻觉必被拦"两侧。
+6. **`scripts/stability_test.py` 新增 H 组：文档条数一致性。**
+   同一轮里实测出一个更普遍的问题 —— 文档里那些「N 条」**全靠手改，早就漂了**：
+   `selftest` 的条数在 `CONTRIBUTING.md` 写着 38、在 `README.md` 写着 72、实际 92；
+   `stability_test` 的本地/CI 两个数在 5 个文件里互相打架。（这与本仓库自己的
+   「文档与代码不脱节」条款直接冲突 —— 只是此前只校验版本号、铁律条数与引用路径，
+   唯独漏了测试条数。）现在 H 组当场跑一遍另两套测试取**实测值**
+   （`--json` 的 `total`），按一张登记表与文档逐条比对；登记了却匹配不到文本也判失败，
+   规则不会悄悄失效。规则表覆盖中英文 README、`CONTRIBUTING.md`、`RELEASE.md`、
+   `SKILL.md`、`i18n/en/SKILL.md`、两份 CI 配置与本文档顶部条目（历史条目不参与）。
 
 ### 影响范围
 
@@ -55,10 +65,13 @@
   `pipeline.py` / `dep_guard` 的退出码可能由 2 变 0 —— 这是修复，不是回归。
 - `bio_guard.py` 只判"格式与口径"，**不判科学性**：基因是否真实存在、
   通路 ID 与名称是否对应，仍需数据库或 `hardcheck.py`。
+- `stability_test.py` 用时增加约 30 秒（H 组要实跑 `selftest.py` / `robustness_test.py`
+  取条数）；退出码语义未变。改了文档里条数的**写法**要在 `COUNT_RULES` 补一条，
+  否则该处声明脱离保护 —— 这条维护契约已写进 `CONTRIBUTING.md`。
 
 ### 验证
 
-`selftest.py` 88/88、`robustness_test.py` 70/70、`stability_test.py` 101/101 全绿。
+`selftest.py` 92/92、`robustness_test.py` 70/70、`stability_test.py` 102/102 全绿。
 
 ---
 
