@@ -60,7 +60,7 @@ jobs:
           python -VV
           python -c "import sys; print('fsencoding =', sys.getfilesystemencoding())"
 
-      # ── 1. 快速冒烟（38 条）
+      # ── 1. 快速冒烟（92 条）
       - name: selftest.py
         run: python scripts/selftest.py
 
@@ -68,9 +68,9 @@ jobs:
       - name: robustness_test.py
         run: python scripts/robustness_test.py
 
-      # ── 3. 工程一致性（本地 99 条；CI 里 97 条）
+      # ── 3. 工程一致性（本地 102 条；CI 里 100 条）
       #     --no-install-check：CI 里没有 ~/.workbuddy 安装副本，
-      #     G 组（安装目录逐字节比对，2 条）整体跳过 → 97 条，不是少跑了两条
+      #     G 组（安装目录逐字节比对，2 条）整体跳过 → 100 条，不是少跑了两条
       - name: stability_test.py
         run: python scripts/stability_test.py --no-install-check
 

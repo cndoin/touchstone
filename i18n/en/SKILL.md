@@ -185,9 +185,9 @@ python3 scripts/dep_guard.py --root . [--offline] [--strict]
 python3 scripts/claim_lint.py --input claims.json --min-level L1
 python3 scripts/pipeline.py --root . --checks checks.json --claims claims.json
 python3 scripts/ledger.py check --root . --drift
-python3 scripts/selftest.py            # 72 smoke cases (seconds)
+python3 scripts/selftest.py            # 92 smoke cases (seconds)
 python3 scripts/robustness_test.py     # 70 deep cases (boundary/anomaly/concurrency/perf)
-python3 scripts/stability_test.py      # 99 engineering-consistency cases
+python3 scripts/stability_test.py      # 102 engineering-consistency cases
 python3 scripts/audit.py               # open-source compliance audit
 ```
 

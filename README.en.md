@@ -104,9 +104,9 @@ python3 scripts/ledger.py check --root . --drift
 python3 scripts/pipeline.py --root . --checks checks.json --claims claims.json --level L1
 
 # 6) Self-tests
-python3 scripts/selftest.py           # 72 smoke cases (seconds)
+python3 scripts/selftest.py           # 92 smoke cases (seconds)
 python3 scripts/robustness_test.py    # 70 deep cases (boundary/anomaly/concurrency/perf)
-python3 scripts/stability_test.py     # 99 engineering-consistency cases (97 with --no-install-check)
+python3 scripts/stability_test.py     # 102 engineering-consistency cases (100 with --no-install-check)
 python3 scripts/audit.py              # open-source compliance audit
 ```
 
@@ -156,9 +156,9 @@ touchstone/
 │   ├── pipeline.py               One-command orchestration
 │   ├── selfcheck.py              Sampling consistency (fallback when nothing to check against)
 │   ├── regression.py             Hallucination regression suite
-│   ├── selftest.py               72 smoke cases
+│   ├── selftest.py               92 smoke cases
 │   ├── robustness_test.py        70 deep cases
-│   ├── stability_test.py         99 engineering-consistency cases
+│   ├── stability_test.py         102 engineering-consistency cases
 │   └── audit.py                  Open-source compliance audit
 ├── assets/                       Schemas, templates, regression cases, CI example
 ├── examples/                     Runnable examples (including one deliberately wrong)
@@ -178,7 +178,7 @@ git clone https://github.com/cndoin/touchstone.git
 cd touchstone
 
 # Verify once — no dependencies to install (standard library only, Python 3.8+)
-python scripts/selftest.py     # use `python` on Windows; expects 38/38
+python scripts/selftest.py     # use `python` on Windows; expects 92/92
 
 # 2) Drop it into your agent
 # WorkBuddy / generic skill dir
@@ -231,8 +231,8 @@ Plus two layers this kit adds: **large-project mechanics** (ledger + drift) and 
 | | `selftest.py` | `robustness_test.py` | `stability_test.py` |
 |---|---|---|---|
 | Role | Fast smoke | Deep robustness | Engineering consistency |
-| Cases | 72 | 70 | 99 (97 with `--no-install-check`) |
-| Covers | Happy path + key failure paths | Boundaries, anomalies, encodings, concurrency, performance, idempotency | Compilation, idempotency, concurrent writes, fuzz, environment (GBK / offline / read-only / non-ASCII paths), doc & version consistency, asset validity, install-dir sync |
+| Cases | 92 | 70 | 102 (100 with `--no-install-check`) |
+| Covers | Happy path + key failure paths | Boundaries, anomalies, encodings, concurrency, performance, idempotency | Compilation, idempotency, concurrent writes, fuzz, environment (GBK / offline / read-only / non-ASCII paths), doc consistency (version / rule counts / case counts / referenced paths / asset validity), install-dir sync |
 | Runtime | seconds | tens of seconds | minutes (includes 16-way concurrency and 200KB inputs) |
 | Run it | after every change | before release, after environment change | before release (especially after touching hooks, docs, or the version number) |
 
@@ -243,10 +243,10 @@ or a workspace that was never synced to the install directory.
 
 > Group G of `stability_test.py` byte-compares the workspace against the installed skill
 > directory, so it only means something when the skill is actually installed locally.
-> In CI or a fresh clone it degrades to 97 cases automatically (group G skipped) —
+> In CI or a fresh clone it degrades to 100 cases automatically (group G skipped) —
 > pass `--no-install-check` to skip it explicitly, or set
 > `TOUCHSTONE_INSTALLED=/path/to/skill` if you installed it elsewhere.
-> **99 is the full local number; 97 does not mean tests went missing.**
+> **102 is the full local number; 100 does not mean tests went missing.**
 
 `audit.py` is the fourth gate: open-source compliance (license headers, zero third-party
 dependencies, no leaked local paths or emails, version consistency).
@@ -260,7 +260,7 @@ Nasty inputs covered: GBK files, UTF-8 BOM, empty files, >2MB files, binaries, p
 5 processes writing the same cache dir, corrupted cache files, `--timeout 0`,
 `--max-checks -1`, `--jobs -5`, 50k-char commands, emoji, and 20 malformed hook inputs.
 
-Current status: **38/38, 70/70, and 99/99 passing**, `audit.py` clean.
+Current status: **92/92, 70/70, and 102/102 passing**, `audit.py` clean.
 
 ---
 

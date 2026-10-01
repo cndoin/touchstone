@@ -35,9 +35,9 @@ grep -n "$VER" VERSION SKILL.md i18n/en/SKILL.md CHANGELOG.md CITATION.cff
 
 ```bash
 # 1. 三套测试全绿
-python scripts/selftest.py          # 38/38
+python scripts/selftest.py          # 92/92
 python scripts/robustness_test.py   # 70/70
-python scripts/stability_test.py    # 99/99
+python scripts/stability_test.py    # 102/102
 python scripts/audit.py --strict    # ERROR=0 WARN=0
 
 # 2. 元数据与资产校验

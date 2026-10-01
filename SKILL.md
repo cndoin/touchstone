@@ -216,9 +216,9 @@ $PY scripts/model_profile.py --model claude-opus-4 --net on
 $PY scripts/model_profile.py --model gpt-4o-mini --net off --json
 
 # 自检（三套，换环境 / 升级 / 发版后跑）
-python3 scripts/selftest.py           # 72 条快速冒烟，秒级
+python3 scripts/selftest.py           # 92 条快速冒烟，秒级
 python3 scripts/robustness_test.py    # 70 条深度：边界/异常/并发/性能/幂等
-python3 scripts/stability_test.py     # 99 条工程一致性：编译/幂等/并发/fuzz/环境/文档与版本/安装同步
+python3 scripts/stability_test.py     # 102 条工程一致性：编译/幂等/并发/fuzz/环境/文档与版本/安装同步
 ```
 
 脚本原则：**fail-closed**（失败=未验证，不是通过）、**纯标准库**（无 pip 依赖）、**离线可用**（网络失败降级为 `unverified`，不崩溃）。安装或改动后先跑 `selftest.py`，全绿再依赖它。
