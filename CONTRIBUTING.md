@@ -22,8 +22,8 @@
 ## 开发流程
 
 ```bash
-python3 scripts/selftest.py          # 快速冒烟（92 条，秒级）
-python3 scripts/robustness_test.py   # 深度健壮性（70 条）
+python3 scripts/selftest.py          # 快速冒烟（101 条，秒级）
+python3 scripts/robustness_test.py   # 深度健壮性（81 条）
 python3 scripts/stability_test.py    # 工程一致性（102 条，含文档/版本/安装同步）
 python3 scripts/audit.py --strict    # 开源合规审计（WARN 也算失败）
 
@@ -74,7 +74,7 @@ case("用例名", [脚本路径, "--参数"], 期望退出码)
 > （`COUNT_RULES`）把「文档写的条数」和「实测条数」逐条比对，实测值来自当场
 > 跑一遍 `selftest.py --json` / `robustness_test.py --json`。
 > 所以**改完用例不用手工同步文档**——H 组会直接告诉你哪个文件写错了。
-> 反过来，如果改了文档里条数的**写法**（比如把 `（92 条）` 改成 `共 92 项`），
+> 反过来，如果改了文档里条数的**写法**（比如把 `（N 条）` 改成 `共 N 项`，N 是任意数字），
 > 要在 `COUNT_RULES` 里补一条，否则那句声明脱离保护；
 > 而**登记了却匹配不到任何文本会判失败**，规则不会悄悄失效。
 
@@ -98,6 +98,94 @@ case("用例名", [脚本路径, "--参数"], 期望退出码)
 `selfcheck.py` 例外：0=高一致，2=灰区，4=低一致，3=错误。
 
 **新增脚本请沿用这套语义**，下游 CI 依赖它做门禁。
+
+---
+
+## 模块契约与边界（新增脚本前先读这一节）
+
+体量变大之后，真正会烂掉的不是某个函数，而是**边界** ——
+"这个能不能依赖那个"没有明文时，每个人（以及每个新会话的 AI）
+都会各自发明一套。所以把已有的约定写死：
+
+### 依赖方向
+
+```
+_common.py     ← 唯一的公共底座（退出码 / 输出 / 编码 / 原子写 / 缓存）
+   ↑
+scripts/*.py     只向下依赖 _common，**互不 import**
+```
+
+- **`scripts/` 下的脚本不许互相 import。** 当前是零横向耦合，请守住：
+  一旦 A import B，B 的失败就会变成 A 的失败，单点问题扩散成链式问题。
+  要共享逻辑就放进 `_common.py`。
+- 脚本之间靠**子进程 + 退出码**协作（`pipeline.py` 就是这么串的）。
+  这样任何一步崩溃都能被如实记成"该步 unverified"，而不是把整条链拖下水。
+
+### 入口三件套（`scripts/` 下的产品脚本）
+
+1. 开头调 `_force_utf8()` —— Windows 控制台默认 GBK，中文输出会炸
+2. 用 `ArgParser`（来自 `_common`），**不要**直接用 `argparse.ArgumentParser`
+   —— 参数错误的退出码必须是 **3**，不能是 argparse 默认的 2
+3. 提供 `--json`；stdout 只出数据，人类提示一律走 stderr
+
+**例外清单（这些例外是有理由的，不要"顺手统一"）：**
+
+- `selftest.py` / `robustness_test.py` / `stability_test.py`：
+  自建一份编码处理，**刻意不 import `_common`** ——
+  测试脚本不该依赖被测代码，否则被测代码坏了，测试自己也起不来。
+  三份实现的行为要保持一致（统一带 `errors="replace"`）。
+- `adapters/claude-code/hooks/*.py`：会被拷进用户项目独立运行，可能根本没有
+  `scripts/`，所以同样自带编码处理，也不走 CLI 参数（hook 从 stdin 收 JSON）。
+- `.github/validate-metadata.py`：CI 专用，允许用 PyYAML，
+  因此刻意放在 `.github/` 下，不参与 `scripts/` 的依赖审计，也没有 `main()`。
+- `_common.py` 是库，没有 `__main__`。
+
+### 哪个目录放什么
+
+| 目录 | 放什么 | 约束 |
+|---|---|---|
+| `scripts/` | 产品脚本 + 三套测试 | 只用标准库；产品脚本遵守入口三件套 |
+| `.github/` | CI 专用脚本 | 可用 PyYAML；不参与依赖审计 |
+| `adapters/` | 各 harness 适配（hooks / 提示词） | **不许依赖 `scripts/`**，要能独立分发 |
+| `references/` | 按需读的模式文档 | 不含可执行代码 |
+
+### 什么该进 pipeline，什么不该
+
+判据一句话：**能不能只看「当前产物 + 给定输入」就给出确定判定？**
+
+- 能 → 进链（`hardcheck` / `dep_guard` / `claim_lint` / `bio_guard`）
+- 不能 → 单独跑。分别是：需要时间维度（`regression`）、需要人
+  （`ledger` / `model_profile`）、需要多轮采样（`selfcheck`）、
+  对象是自己的运行时而不是交付物（三套测试）、
+  或触发时机不同（`audit` 是发布前，`verifiers` 是灰区人工调用）
+
+### 输出契约
+
+- stdout **只出数据**（JSON 或结构化文本）；人类提示、错误、进度一律走 stderr
+- `--json` 时 stdout 必须是**一个可解析的 JSON 对象**
+- `_common.make_result(kind, target, status, ...)` 的 `kind` 是**检查器名**
+  （`species` / `gene` / `citation` …），下游按它聚合。
+  **不要塞文件路径** —— `bio_guard` 曾经就这么错过，聚合结果全失真、
+  且没有任何测试发现，因为当时 JSON 只断言了"能解析"
+- `--json` 的字段名一旦发布就是接口，改名按破坏性变更处理
+
+### 每个脚本都要有测试引用
+
+新增脚本时，三套测试里**至少有一处会真的跑它**。
+零引用 = 没有回归保护 —— `audit.py` 就这样裸奔了很久
+（280 行的发布前自检脚本，自己却不在任何检查范围内）。自查：
+
+```bash
+grep -c "你的脚本名.py" scripts/selftest.py scripts/robustness_test.py scripts/stability_test.py
+```
+
+### 性能上的硬边界
+
+**单条正则不要出现"分组内量词 + 分组外量词"的嵌套结构**
+（形如 `(X*)*`、`([^()]*(?:\([^()]*\)[^()]*)*)`）。
+这类模式在"很长且匹配不上"的输入上会退化成 O(n²)：
+`bio_guard` 的 `CALL_RE` 就被 20 万字符的单行拖到 120 秒超时。
+`robustness_test.py` 的「超长单行」组专门盯这个，加新正则时留意。
 
 ---
 

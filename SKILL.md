@@ -2,7 +2,7 @@
 name: touchstone
 description: Touchstone · 反幻觉工程套件（试金石；曾用名 dehallucination）。**只在满足下列任一条时使用**：(1) 需要引用外部可判定事实——URL / DOI / 论文 / 法律条文 / API 签名 / 版本号 / 包名 / 文件路径 / 命令输出；(2) 涉及高风险或不可逆领域——法律 / 医疗 / 金融 / 对外发布 / 生产环境操作；(3) 推进大型长周期项目——多会话、超大代码库、多子 agent，错误会累积；(4) 用户明确要求核实——"这个真的存在吗""核实一下""别瞎编""有依据吗""这个 API/论文/文件是真的吗""你确定做完了吗"；(5) 输出会被直接采用而不经人工复核，或用户先表态需防谄媚诱导；(6) **输出包含会被采用的数值或符号结论**——算钱/税率/工期/容量/比例、财务或统计口径、公式推导、工程参数、复现论文里的数字（心算、口径弄错、题面缺条件都属此类）；(7) **涉及生物医学实体或组学分析**——基因/蛋白/变异符号、物种、ID 体系（Ensembl/Entrez/RefSeq/KEGG/GO）、通路富集、单细胞/空间转录组、GWAS/MR、临床解读（基因名、物种、ID、统计口径、结论外推都是幻觉重灾区）。**不适用（不要加载本技能）**：闲聊、创意写作、格式调整、单文件小幅改写、纯本地可运行的小重构、解释代码、一次性小问题、单点算术问答（"3 的平方是多少"）——这类任务无外部可判定事实、可逆且不对外，直接回答即可，加载本套件只会拖慢速度并浪费 token。
 license: MIT
-version: 4.3.0
+version: 4.4.0
 ---
 
 # Touchstone · 反幻觉工程套件
@@ -216,8 +216,8 @@ $PY scripts/model_profile.py --model claude-opus-4 --net on
 $PY scripts/model_profile.py --model gpt-4o-mini --net off --json
 
 # 自检（三套，换环境 / 升级 / 发版后跑）
-python3 scripts/selftest.py           # 92 条快速冒烟，秒级
-python3 scripts/robustness_test.py    # 70 条深度：边界/异常/并发/性能/幂等
+python3 scripts/selftest.py           # 101 条快速冒烟，秒级
+python3 scripts/robustness_test.py    # 81 条深度：边界/异常/并发/性能/幂等
 python3 scripts/stability_test.py     # 102 条工程一致性：编译/幂等/并发/fuzz/环境/文档与版本/安装同步
 ```
 

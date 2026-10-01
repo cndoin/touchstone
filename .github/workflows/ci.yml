@@ -60,11 +60,11 @@ jobs:
           python -VV
           python -c "import sys; print('fsencoding =', sys.getfilesystemencoding())"
 
-      # ── 1. 快速冒烟（92 条）
+      # ── 1. 快速冒烟（101 条）
       - name: selftest.py
         run: python scripts/selftest.py
 
-      # ── 2. 深度健壮性（70 条）
+      # ── 2. 深度健壮性（81 条）
       - name: robustness_test.py
         run: python scripts/robustness_test.py
 

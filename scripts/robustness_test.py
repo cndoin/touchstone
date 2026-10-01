@@ -39,7 +39,7 @@ ALLOWED_EXIT = {0, 1, 2, 3}
 def _utf8():
     for s in (sys.stdout, sys.stderr):
         try:
-            s.reconfigure(encoding="utf-8")
+            s.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
 
@@ -324,6 +324,58 @@ def test_regression(res, tmp):
           *run("regression.py", ["--cases", notobj]), expect_exit=3)
 
 
+def test_bio_guard(res, tmp, paths):
+    """生信闸门的边界：编码地狱 / 语法不完整 / 二进制 / 超长行 / 极端参数。
+
+    重点验 _code_only() 的降级路径：.py 语法不完整时 tokenize 必然失败，
+    此时必须降级为启发式剥离并如实告知，绝不能抛异常或静默放过。
+    """
+    g = "bio_guard"
+    # 编码地狱目录（GBK / BOM / 空文件 / 二进制 / 中文空格路径）整体扫一遍
+    check(res, g, "编码地狱目录扫描 → 不崩",
+          *run("bio_guard.py", ["--root", paths["enc"], "--offline", "--json"]),
+          need_json=True)
+    check(res, g, "空目录 → 用法错误，不崩",
+          *run("bio_guard.py", ["--root", paths["empty"], "--offline"]), expect_exit=3)
+
+    b = os.path.join(tmp, "bio-robust")
+    os.makedirs(b, exist_ok=True)
+
+    broken = os.path.join(b, "broken.py")
+    with open(broken, "w", encoding="utf-8") as f:
+        f.write("def f(:\n    人类 TP53 分析（括号未闭合\n    return\n")
+    check(res, g, "语法不完整的 .py → 降级不崩（tokenize 失败路径）",
+          *run("bio_guard.py", ["--file", broken, "--only", "gene",
+                                "--no-relevance-gate", "--json"]), need_json=True)
+
+    empty_md = os.path.join(b, "empty.md")
+    open(empty_md, "w", encoding="utf-8").close()
+    check(res, g, "空文件 → 不崩",
+          *run("bio_guard.py", ["--file", empty_md, "--offline", "--json"]),
+          need_json=True)
+
+    binfile = os.path.join(b, "raw.md")
+    with open(binfile, "wb") as f:
+        f.write(bytes(range(256)) * 40)
+    check(res, g, "二进制内容当输入 → 不崩",
+          *run("bio_guard.py", ["--file", binfile, "--offline", "--json"]),
+          need_json=True)
+
+    longfile = os.path.join(b, "long.md")
+    with open(longfile, "w", encoding="utf-8") as f:
+        f.write("物种：人类 " + "A" * 200000 + "\n")
+    check(res, g, "20 万字符单行 → 不崩（无正则回溯爆炸）",
+          *run("bio_guard.py", ["--file", longfile, "--offline", "--json"]),
+          need_json=True)
+
+    check(res, g, "未知 --only → 用法错误",
+          *run("bio_guard.py", ["--file", empty_md, "--only", "__nope__"]),
+          expect_exit=3)
+    check(res, g, "不存在的文件 → 用法错误",
+          *run("bio_guard.py", ["--file", os.path.join(b, "nope.md")]),
+          expect_exit=3)
+
+
 def test_pipeline(res, tmp, paths):
     g = "pipeline"
     check(res, g, "root 不存在 → 用法错误",
@@ -500,6 +552,45 @@ def test_idempotent_and_perf(res, tmp, paths):
     res.add(g, "dep_guard 扫 200 文件 < 15s（实测 %.2fs）" % dt, ok, "exit=%s" % c)
 
 
+def test_long_line(res, tmp, paths):
+    """超长单行：正则类检查器最容易在这里退化成 O(n²)。
+
+    与 test_idempotent_and_perf 里的"200 个文件"不同 —— 那种输入是多行 ×
+    短行，正则按匹配点跑完全线性。真正危险的是「单行几十万字符、且匹配不上」：
+    没有上界的嵌套量词会在每个起始位置重扫一遍整个字符串。
+
+    bio_guard 的 CALL_RE 曾经就是这样：20 万字符的单行把它拖到 120 秒超时。
+    """
+    g = "超长单行"
+    d = os.path.join(tmp, "longline")
+    os.makedirs(d, exist_ok=True)
+
+    long_py = os.path.join(d, "long.py")
+    with open(long_py, "w", encoding="utf-8") as f:
+        f.write("import os\n# " + "A" * 300000 + "\n")
+    long_md = os.path.join(d, "long.md")
+    with open(long_md, "w", encoding="utf-8") as f:
+        f.write("物种：人类（Homo sapiens）" + "A" * 300000 + "\n")
+
+    cases = [
+        ("dep_guard.py", ["--root", d, "--offline", "--json"]),
+        ("hardcheck.py", ["--file", long_py, "--offline", "--json"]),
+        ("bio_guard.py", ["--file", long_md, "--no-relevance-gate",
+                          "--offline", "--json"]),
+    ]
+    for script, args in cases:
+        t0 = time.time()
+        c, o, e = run(script, args, timeout=40)
+        dt = time.time() - t0
+        ok = dt < 15.0 and c in ALLOWED_EXIT and "Traceback" not in e
+        try:
+            json.loads(o)
+        except Exception:
+            ok = False
+        res.add(g, "%s 处理 30 万字符单行 < 15s（实测 %.2fs）" % (script, dt),
+                ok, "exit=%s" % c)
+
+
 def main(argv=None):
     _utf8()
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -508,8 +599,9 @@ def main(argv=None):
         print("\n用法：python scripts/robustness_test.py [--json] [--only=组名,组名]")
         print("可选组：%s" % ", ".join(
             ["hardcheck", "dep_guard", "claim_lint", "ledger", "selfcheck",
-             "regression", "pipeline", "hooks", "extreme", "perf"]))
-        print("说明：跑完 70 项后按失败数决定退出码。")
+             "regression", "pipeline", "bio_guard", "hooks", "long_line",
+             "extreme", "perf"]))
+        print("说明：跑完全部检查项后按失败数决定退出码。")
         return 0
     as_json = "--json" in argv
     only = None
@@ -529,7 +621,9 @@ def main(argv=None):
             "selfcheck": lambda: test_selfcheck(res, tmp),
             "regression": lambda: test_regression(res, tmp),
             "pipeline": lambda: test_pipeline(res, tmp, paths),
+            "bio_guard": lambda: test_bio_guard(res, tmp, paths),
             "hooks": lambda: test_hooks(res, tmp),
+            "long_line": lambda: test_long_line(res, tmp, paths),
             "extreme": lambda: test_extreme(res, tmp, paths),
             "perf": lambda: test_idempotent_and_perf(res, tmp, paths),
         }

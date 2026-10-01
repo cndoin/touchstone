@@ -2,7 +2,7 @@
 name: touchstone
 description: Touchstone · anti-hallucination engineering kit (a touchstone is a stone for assaying gold; formerly named dehallucination). **Use ONLY when at least one of these holds:** (1) the output must cite externally decidable facts — URLs, DOIs, papers, legal clauses, API signatures, version numbers, package names, file paths, command output; (2) the domain is high-stakes or irreversible — legal, medical, financial, public release, production operations; (3) it is a large long-running project — multi-session, huge codebase, many subagents — where errors compound; (4) the user explicitly asks for verification — "does this really exist", "verify this", "don't make things up", "is this API/paper/file real", "are you sure it's finished"; (5) the output will be adopted without human review, or the user has stated a position and sycophancy is a risk; (6) **the output contains numeric or symbolic conclusions that will be adopted** — money, tax rates, schedules, capacity, ratios, financial or statistical bases, formula derivations, engineering parameters, or reproducing numbers from a paper (mental arithmetic, wrong bases, and under-specified problems all fall here). **Do NOT load this kit for:** chit-chat, creative writing, formatting tweaks, small single-file edits, small local refactors that run locally, explaining code, one-off quick questions, or a single-point arithmetic question ("what is 3 squared") — these have no externally decidable facts, are reversible and internal; just answer directly. Loading the kit only slows things down and burns tokens.
 license: MIT
-version: 4.3.0
+version: 4.4.0
 ---
 
 # Touchstone · Anti-Hallucination Engineering Kit
@@ -185,7 +185,7 @@ python3 scripts/dep_guard.py --root . [--offline] [--strict]
 python3 scripts/claim_lint.py --input claims.json --min-level L1
 python3 scripts/pipeline.py --root . --checks checks.json --claims claims.json
 python3 scripts/ledger.py check --root . --drift
-python3 scripts/selftest.py            # 92 smoke cases (seconds)
+python3 scripts/selftest.py            # 101 smoke cases (seconds)
 python3 scripts/robustness_test.py     # 70 deep cases (boundary/anomaly/concurrency/perf)
 python3 scripts/stability_test.py      # 102 engineering-consistency cases
 python3 scripts/audit.py               # open-source compliance audit

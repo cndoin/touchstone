@@ -79,7 +79,7 @@ GUARD_ALLOW = [
 def _utf8():
     for s in (sys.stdout, sys.stderr):
         try:
-            s.reconfigure(encoding="utf-8")
+            s.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
 
@@ -442,6 +442,101 @@ def main(argv=None):
             n_excl == n_full - 1 and n_excl > 0, n_full - 1, n_excl,
             "excluded=%s full=%s" % (n_excl, n_full)))
 
+        # ── 相关性门：非生物医学文件不该被生信检查（否则源码常量被当基因符号）
+        # 这条正是本轮审计暴露的主缺陷：此前对任何 .py 都报 5 条，其中 1 条 FAIL。
+        # 样本里刻意放 PASS / FAIL 这类独立大写 token —— 它们会被基因正则命中，
+        # 从而证明"门内 0 条、强制全查 >0 条"这组差异是真实存在的。
+        plain_py = os.path.join(bio, "plain_scan.py")
+        with open(plain_py, "w", encoding="utf-8") as f:
+            f.write("""# 一个普通工程脚本，不含任何生物医学内容
+PASS = 'pass'
+FAIL = 'fail'
+
+
+def run(p):
+    return p.stdout
+""")
+        case("bio_guard 相关性门：非生物医学脚本被跳过（不误报基因符号）",
+             [bg, "--file", plain_py, "--offline"], 2)
+        _cg, _og, _ = run([bg, "--file", plain_py, "--offline", "--json"])
+        _cf, _of, _ = run([bg, "--file", plain_py, "--no-relevance-gate",
+                           "--offline", "--json"])
+        try:
+            _n_gated = len(json.loads(_og)["results"])
+            _n_forced = len(json.loads(_of)["results"])
+        except Exception:
+            _n_gated, _n_forced = -1, -1
+        results.append(Result(
+            "bio_guard --no-relevance-gate 才跑检查（门内 0 条 / 强制 >0 条）",
+            _n_gated == 0 and _n_forced > 0,
+            "门内 0 条、强制 >0 条",
+            "gated=%s forced=%s" % (_n_gated, _n_forced)))
+
+        # 中文注释里的全角标点必须被忽略（只查代码 token）。
+        # 此前实现是"出现即 FAIL"，于是任何带中文注释的脚本必然报红 ——
+        # 恒红的检查等于没有信号，和"无网必红"是同一类缺陷。
+        cn_py = os.path.join(bio, "cn_comment.py")
+        with open(cn_py, "w", encoding="utf-8") as f:
+            f.write("""# 差异表达分析（DESeq2）：TCGA-LUAD 队列
+# 注意：p 值需做多重检验校正，显著阈值为（0.05）
+padj = 0.01
+""")
+        case("bio_guard 中文注释里的全角标点不误判（只查代码 token）",
+             [bg, "--file", cn_py, "--only", "gene", "--offline"], 0)
+
+        # UniProt accession（必含数字）与大写下划线常量必须区分开
+        acc_py = os.path.join(bio, "acc.py")
+        with open(acc_py, "w", encoding="utf-8") as f:
+            f.write("""# 人类 TP53 蛋白（UniProt P04637）
+EXIT_OK = 0
+MAX_TARGETS = 10
+""")
+        _ca, _oa, _ = run([bg, "--file", acc_py, "--only", "gene", "--offline", "--json"])
+        try:
+            _fa = [x["detail"] for x in json.loads(_oa)["results"]]
+        except Exception:
+            _fa = []
+        _hit_acc = any("P04637" in x for x in _fa)
+        _hit_const = any(("EXIT_OK" in x) or ("MAX_TARGETS" in x) for x in _fa)
+        results.append(Result(
+            "bio_guard 真 UniProt accession 会提示、常量不误判",
+            _hit_acc and not _hit_const, "含 P04637、不含 EXIT_OK",
+            "acc=%s const=%s" % (_hit_acc, _hit_const)))
+
+        # 输出契约：kind 必须落在检查器名上，下游才能按检查器聚合。
+        # 此前 r() 把 kind 填成了文件路径，聚合结果全失真。
+        _ck, _ok2, _ = run([bg, "--file", bad_bio, "--offline", "--json"])
+        try:
+            _kinds = sorted({x["kind"] for x in json.loads(_ok2)["results"]})
+        except Exception:
+            _kinds = []
+        results.append(Result(
+            "bio_guard JSON 的 kind 是检查器名（不是文件路径）",
+            bool(_kinds) and set(_kinds) <= set(
+                ["species", "gene", "id", "orgdb", "stat",
+                 "numeric", "overclaim", "citation"]),
+            "全为检查器名", ",".join(_kinds)))
+
+        # --exclude 直接写目录名也要生效（此前只认 glob，目录名静默失效）
+        _sub = os.path.join(bio, "sub_notes")
+        os.makedirs(_sub, exist_ok=True)
+        with open(os.path.join(_sub, "notes.md"), "w", encoding="utf-8") as f:
+            f.write("""# 生信笔记
+物种：人类（Homo sapiens）
+""")
+        _cd, _od, _ = run([bg, "--root", bio, "--offline", "--json",
+                           "--exclude", "sub_notes"])
+        try:
+            _paths = json.loads(_od)["scanned"]
+        except Exception:
+            _paths = []
+        results.append(Result(
+            "bio_guard --exclude 支持直接写目录名",
+            bool(_paths) and not any("sub_notes" in p for p in _paths),
+            "scanned 不含 sub_notes/*",
+            "scanned=%d 命中=%s" % (len(_paths),
+                                    any("sub_notes" in p for p in _paths))))
+
         # pipeline 接入：生信步骤与其它步骤同等的"可选 / 失败即拦"
         case("pipeline --bio 串联生信核查（坏样本 → 拦）",
              [pl, "--root", tmp, "--no-deps", "--offline", "--bio", bad_bio], 1)
@@ -449,6 +544,15 @@ def main(argv=None):
              [pl, "--root", tmp, "--no-deps", "--offline", "--bio", good_bio], 0)
         case("pipeline 不传 --bio 时该步跳过（不影响总判定）",
              [pl, "--root", tmp, "--no-deps", "--offline"], 0)
+
+    # audit.py：发布前自检脚本，此前**零测试覆盖** —— 一个检查别人合规性的
+    # 脚本自己不在任何检查范围内，是明显的结构性盲区。
+    au = os.path.join(HERE, "audit.py")
+    if os.path.exists(au):
+        case("audit --json 在仓库自身可跑通", [au, "--json"], 0)
+        case("audit --strict 在仓库自身无 ERROR/WARN", [au, "--strict"], 0)
+        case("audit 未知参数 → 用法错误（退出码 3，不是 2）",
+             [au, "--definitely-not-an-option"], 3)
 
     passed = sum(1 for r in results if r.ok)
     failed = len(results) - passed

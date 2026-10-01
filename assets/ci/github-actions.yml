@@ -67,9 +67,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: 快速冒烟（92 条）
+      - name: 快速冒烟（101 条）
         run: python skills/touchstone/scripts/selftest.py
-      - name: 深度健壮性（70 条）
+      - name: 深度健壮性（81 条）
         run: python skills/touchstone/scripts/robustness_test.py --json
       # 工程一致性会拿工作区和安装目录比对，CI 里没有安装目录 → 跳过该组
       - name: 工程一致性（100 条）

@@ -109,10 +109,10 @@ python3 scripts/selfcheck.py --samples examples/samples.json
 # 7) 回归集
 python3 scripts/regression.py --cases assets/regression-cases.json
 
-# 8) 快速自检（92 条，秒级；每次改动后跑）
+# 8) 快速自检（101 条，秒级；每次改动后跑）
 python3 scripts/selftest.py
 
-# 9) 深度健壮性测试（70 条；发版前 / 换环境后跑）
+# 9) 深度健壮性测试（81 条；发版前 / 换环境后跑）
 python3 scripts/robustness_test.py
 
 # 10) 工程一致性 / 稳定性测试（102 条；发版前跑）
@@ -163,7 +163,7 @@ python3 scripts/stability_test.py
 | | `selftest.py` | `robustness_test.py` | `stability_test.py` |
 |---|---|---|---|
 | 定位 | 快速冒烟 | 深度健壮性 | 工程一致性 |
-| 用例 | 92 条 | 70 条 | 102 条（`--no-install-check` 时 100 条） |
+| 用例 | 101 条 | 81 条 | 102 条（`--no-install-check` 时 100 条） |
 | 覆盖 | 正常路径 + 关键失败路径 | 边界 / 异常 / 编码 / 并发 / 性能 / 幂等 / 极端参数 | 编译 / 幂等 / 并发写 / 垃圾输入 fuzz / 环境（GBK·离线·只读·非 ASCII 路径）/ 文档一致性（版本号 / 铁律条数 / 测试条数 / 引用路径 / 资产合法性）/ 安装目录同步 |
 | 耗时 | 秒级 | 几十秒 | 几分钟（含 16 路并发与 200KB 级输入） |
 | 何时跑 | 每次改动后 | 发版前、换环境后 | 发版前（尤其动过 hook、文档或版本号后） |
@@ -238,8 +238,8 @@ touchstone/
 │   ├── verifiers.py              可插拔检测器桥接（外部检测器探测）
 │   ├── pipeline.py               一键编排：hardcheck → dep_guard → claim_lint
 │   ├── audit.py                  开源合规审计（许可证头 / 零依赖 / 隐私 / 版本一致）
-│   ├── selftest.py               快速自检（92 条，秒级）
-│   ├── robustness_test.py        深度健壮性测试（70 条：边界/异常/并发/性能/幂等）
+│   ├── selftest.py               快速自检（101 条，秒级）
+│   ├── robustness_test.py        深度健壮性测试（81 条：边界/异常/并发/性能/幂等）
 │   └── stability_test.py         工程一致性测试（102 条：编译/幂等/并发/fuzz/环境/文档一致/安装同步）
 ├── assets/
 │   ├── claim-schema.json         输出契约 JSON Schema
@@ -275,7 +275,7 @@ cd touchstone
 装完先验证一次：
 
 ```bash
-python scripts/selftest.py     # Windows 用 python；应输出 92/92 通过
+python scripts/selftest.py     # Windows 用 python；应输出 101/101 通过
 ```
 
 > Windows 用户注意：脚本已强制 UTF-8 输出，但**建议在 PowerShell 里先执行
