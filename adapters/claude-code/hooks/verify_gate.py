@@ -46,7 +46,7 @@ COUNT_RESET_SECONDS = 600   # 10 分钟无阻断则计数归零
 def _utf8():
     for s in (sys.stdout, sys.stderr):
         try:
-            s.reconfigure(encoding="utf-8")
+            s.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
 

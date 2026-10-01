@@ -34,10 +34,21 @@ DEFAULT_CACHE_TTL = 6 * 3600  # 缓存 6 小时，避免重复核查同一个 UR
 
 
 def _force_utf8():
-    """Windows 默认编码可能是 GBK，显式切成 UTF-8，避免中文输出炸掉。"""
+    """Windows 默认编码可能是 GBK，显式切成 UTF-8，避免中文输出炸掉。
+
+    errors="replace" 是刻意的：遇到控制台打不出的字符时降级成 `?`，
+    而不是抛 UnicodeEncodeError —— 闸门脚本绝不能因为"输出不了"而崩。
+
+    **编码处理有三处实现，边界见 CONTRIBUTING 的「模块契约与边界」：**
+      - `scripts/_common.py` 这份 —— 产品脚本统一复用
+      - 三套测试脚本各自一份 —— 测试**刻意不依赖被测代码**，否则 `_common`
+        坏了测试也跟着坏，等于没有测试
+      - `adapters/*/hooks/` 各自一份 —— hook 随适配器单独分发，不带 `_common`
+    三处的 `errors=` 必须同为 `"replace"`，行为不一致本身就是 bug。
+    """
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8")
+            stream.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
 

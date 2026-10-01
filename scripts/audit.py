@@ -20,6 +20,7 @@
 退出码：0=通过 1=存在问题 3=用法错误
 """
 
+import argparse
 import ast
 import json
 import os
@@ -28,6 +29,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+
+sys.path.insert(0, HERE)
+
+from _common import ArgParser, _force_utf8  # noqa: E402
 ALLOWED_EXIT = {0, 1, 3}
 
 try:
@@ -79,14 +84,6 @@ EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]{2,}")
 
 SKIP_SCAN_DIRS = {"__pycache__", ".git", "_deprecated-v1"}
 SCAN_EXT = {".py", ".md", ".json", ".yml", ".yaml", ".cff", ".txt"}
-
-
-def _utf8():
-    for s in (sys.stdout, sys.stderr):
-        try:
-            s.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
 
 
 class Report(object):
@@ -216,17 +213,18 @@ def check_docs(rep):
 
 
 def main(argv=None):
-    _utf8()
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if any(a in ("-h", "--help") for a in argv):
-        sys.stdout.write((__doc__ or "touchstone audit") + "\n")
-        return 0
-    unknown = [a for a in argv if a not in ("--json", "--strict")]
-    if unknown:
-        sys.stderr.write("[touchstone] 参数错误：%s\n" % unknown)
-        return 3
-    as_json = "--json" in argv
-    strict = "--strict" in argv
+    _force_utf8()
+    parser = ArgParser(
+        prog="audit.py",
+        description=(__doc__ or "touchstone 开源合规审计").strip(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--json", action="store_true", help="输出 JSON")
+    parser.add_argument("--strict", action="store_true",
+                        help="严格模式：WARN 也按失败计")
+    a = parser.parse_args(argv)
+    as_json = a.json
+    strict = a.strict
 
     rep = Report()
     try:

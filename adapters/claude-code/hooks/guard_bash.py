@@ -80,7 +80,7 @@ DANGEROUS = [
 def _utf8():
     for s in (sys.stdout, sys.stderr):
         try:
-            s.reconfigure(encoding="utf-8")
+            s.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
 
