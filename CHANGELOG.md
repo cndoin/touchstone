@@ -6,6 +6,69 @@
 
 ---
 
+## v4.5.0（2026-10-01）· 工具调用模式：调用链核查闸门 tool_guard
+
+**MINOR：新增一个专项模式与一个闸门脚本，堵住"调到一半忘了前面在干什么"
+这一整层盲区；并修掉条数门禁自身的两个登记漏洞。**
+
+### 背景（问题是什么）
+
+工具调用幻觉此前只治了三层：调用真伪（`dep_guard`）、声明层（`claim_lint`）、
+事实层（`hardcheck`）。但"**调到一半忘记前面在干什么**"这一类问题不在任何一层里：
+
+- 它的形态是**每一步单看都对，连起来看是错的**——链断了（`seq` 跳号）、
+  开了头没下文（`started` 无终态）、同一不可逆操作做了两遍（重复推送）、
+  原样撞墙式重试、没读就改、目标中途漂移、失败被记成成功。
+- 这类错误**主观上无法自察**（忘了就是忘了），只能抓调用记录上的客观症状。
+- 事后回忆本身就是"忘了"之后补写的，所以核查对象必须是**边跑边记的调用链记录**。
+
+同时实测发现**条数门禁的两个登记漏洞**：`README.en.md` 与 `i18n/en/SKILL.md`
+的 `robustness` 条数两处**从未登记进 `COUNT_RULES`**，于是上一轮 81 条的更新
+把它们漏成了旧值 70 —— **没登记 = 没检查，登记表本身就是覆盖面的上限**。
+
+### 改了什么
+
+1. **新增 `scripts/tool_guard.py`（八个检查器）**：`schema`（结构与枚举）、
+   `order`（链完整性）、`closure`（started 未闭环）、`duplicate`（非幂等重复）、
+   `retry`（原样重试超限）、`prereq`（改前未读 / 发前未存）、`plan`（目标/计划漂移）、
+   `result`（结果误读）。零依赖、fail-closed，解析不了的记录计**失败**而非崩溃。
+2. **新增 `assets/tool-trace-schema.json`**：调用链记录契约。免责字段
+   `idempotent` / `creates` / `rescope` / `retry_of` 走"**举证责任在记录方**"——
+   刻意不按工具名自动放行（`write` 既能建新也能覆盖）。
+3. **新增 `references/20-tool-mode.md`**：工具调用幻觉六层分类 + "忘了在干什么"
+   的 8 个可观测症状表 + 与 `claim_lint` / `hardcheck` / `dep_guard` / `ledger` 的分工。
+4. **`scripts/pipeline.py` 新增 `--trace` 步骤**（可重复给多份记录），
+   与 `--bio` 同等的"可选 / 失败即拦"；docstring 编排清单同步。
+5. **`SKILL.md` / `i18n/en/SKILL.md`** 新增「工具调用模式」章节 + 参考文件表两行
+   （补上 19-bio-mode 的漏行）+ 闸门命令 + 红线补"工具调用回执"。
+6. **测试**：`selftest.py` +17 条（合规零告警 / 反例五类症状各有命中 /
+   免责字段真放行 / 阈值可调 / fail-closed / pipeline 接入），
+   `robustness_test.py` 新增 `tool_guard` 组 12 条（GBK / 二进制 / 空文件 /
+   混型数组 / 10 万字符单行 / 500 条记录 / 中文空格路径 / 多文件合并 /
+   partial 降级 unverified）。
+7. **`stability_test.py` COUNT_RULES 补两条漏登记**（`README.en.md` 与
+   `i18n/en/SKILL.md` 的 robustness 行），并注明"登记表是覆盖面的上限"。
+8. **`tool_guard` 自身修两处逻辑**：① `duplicate` 只算 `status=ok` 的调用
+   （失败重试归 `retry` 管，同一件事不报两遍）；② `plan` 在 `rescope` 之后
+   以新目标为新基准（否则一次换目标后每条都得再声明，那是逼记录造假）。
+   同时补"干净链也逐检查器出 PASS"——`合计 0` 是"没把话说完"的假信号。
+9. **README 目录树同步**（补齐 18/19/20 参考文件、`bio_guard.py`、`tool_guard.py`、
+   `tool-trace-schema.json`，脚本计数 14 → 16）。
+
+### 影响范围
+
+- 新增能力，不动既有闸门判据；`pipeline` 不传 `--trace` 时该步跳过，行为不变。
+- 误报控制：合规链零告警已实测（误报太多的闸门会被绕过，等于没有闸门）。
+- 文档条数全面刷新（selftest 101→118、robustness 81→93、stability 102→104），
+  由 `_count_probe.py fix` 按 `COUNT_RULES` 同一张表改写，零失配。
+
+### 验证
+
+`selftest.py` 118/118、`robustness_test.py` 93/93、`stability_test.py` 104/104、
+`audit.py --strict` ERROR=0 WARN=0 全绿。
+
+---
+
 ## v4.4.0（2026-10-01）· 结构加固：bio_guard 五处结构性缺陷 + ReDoS 修复 + 模块契约成文
 
 **MINOR：修掉上一版新增脚本的五个结构性缺陷与一处灾难性回溯，

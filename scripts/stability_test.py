@@ -491,6 +491,10 @@ COUNT_RULES = [
     ("README.md", r"应输出 (\d+)/(\d+) 通过", ("selftest", "selftest")),
     # 英文文档是平行副本（RELEASE.md 要求与中文版对齐），漏改一处这里会点出来
     ("README.en.md", r"selftest\.py[^\n]*?(\d+) smoke cases", ("selftest",)),
+    # 这条以前没登记，于是"70 deep cases"连续两轮漏改 ——
+    # 没登记 = 没检查，登记表本身就是覆盖面的上限
+    ("README.en.md", r"robustness_test\.py[^\n]*?(\d+) deep cases",
+     ("robustness",)),
     ("README.en.md",
      r"stability_test\.py[^\n]*?(\d+) engineering-consistency cases \((\d+) with",
      ("stability", "stability_ci")),
@@ -506,6 +510,8 @@ COUNT_RULES = [
     ("README.en.md", r"\*\*(\d+)/(\d+), (\d+)/(\d+), and (\d+)/(\d+) passing\*\*",
      ("selftest", "selftest", "robustness", "robustness", "stability", "stability")),
     ("i18n/en/SKILL.md", r"selftest\.py[^\n]*?(\d+) smoke cases", ("selftest",)),
+    ("i18n/en/SKILL.md", r"robustness_test\.py[^\n]*?(\d+) deep cases",
+     ("robustness",)),
     ("i18n/en/SKILL.md", r"stability_test\.py[^\n]*?(\d+) engineering-consistency",
      ("stability",)),
     # RELEASE.md 发版前检查清单（形如 38/38）

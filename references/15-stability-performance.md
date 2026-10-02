@@ -80,16 +80,16 @@
 | | `selftest.py` | `robustness_test.py` | `stability_test.py` |
 |---|---|---|---|
 | 定位 | 快速冒烟 | 深度健壮性 | 工程一致性 |
-| 用例 | 101 条 | 81 条 | 102 条 |
+| 用例 | 118 条 | 93 条 | 104 条 |
 | 覆盖 | 正常路径 + 关键失败路径 | 边界 / 异常 / 编码 / 并发 / 性能 / 幂等 / 极端参数 | 编译 / 幂等 / 并发写 / 垃圾输入 / 环境（GBK·离线·只读·非 ASCII 路径）/ 文档一致性（版本号 / 铁律条数 / 测试条数 / 引用路径 / 资产合法性）/ 安装目录同步 |
 | 耗时 | 秒级 | 几十秒 | 几分钟 |
 | 何时跑 | 每次改动后 | 发版前、换环境后 | 发版前（动过 hook、文档或版本号后必跑） |
 
 ```bash
-python scripts/selftest.py          # 秒级冒烟（101 条）
-python scripts/robustness_test.py   # 深度：81 条
+python scripts/selftest.py          # 秒级冒烟（118 条）
+python scripts/robustness_test.py   # 深度：93 条
 python scripts/robustness_test.py --only=extreme,perf   # 只跑某几组
-python scripts/stability_test.py    # 工程一致性：102 条
+python scripts/stability_test.py    # 工程一致性：104 条
 python scripts/stability_test.py --no-install-check      # 跳过安装目录比对
 ```
 
