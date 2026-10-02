@@ -2,7 +2,7 @@
 name: touchstone
 description: Touchstone · 反幻觉工程套件（试金石；曾用名 dehallucination）。**只在满足下列任一条时使用**：(1) 需要引用外部可判定事实——URL / DOI / 论文 / 法律条文 / API 签名 / 版本号 / 包名 / 文件路径 / 命令输出；(2) 涉及高风险或不可逆领域——法律 / 医疗 / 金融 / 对外发布 / 生产环境操作；(3) 推进大型长周期项目——多会话、超大代码库、多子 agent，错误会累积；(4) 用户明确要求核实——"这个真的存在吗""核实一下""别瞎编""有依据吗""这个 API/论文/文件是真的吗""你确定做完了吗"；(5) 输出会被直接采用而不经人工复核，或用户先表态需防谄媚诱导；(6) **输出包含会被采用的数值或符号结论**——算钱/税率/工期/容量/比例、财务或统计口径、公式推导、工程参数、复现论文里的数字（心算、口径弄错、题面缺条件都属此类）；(7) **涉及生物医学实体或组学分析**——基因/蛋白/变异符号、物种、ID 体系（Ensembl/Entrez/RefSeq/KEGG/GO）、通路富集、单细胞/空间转录组、GWAS/MR、临床解读（基因名、物种、ID、统计口径、结论外推都是幻觉重灾区）。**不适用（不要加载本技能）**：闲聊、创意写作、格式调整、单文件小幅改写、纯本地可运行的小重构、解释代码、一次性小问题、单点算术问答（"3 的平方是多少"）——这类任务无外部可判定事实、可逆且不对外，直接回答即可，加载本套件只会拖慢速度并浪费 token。
 license: MIT
-version: 4.4.0
+version: 4.5.0
 ---
 
 # Touchstone · 反幻觉工程套件
@@ -99,7 +99,7 @@ Q3 有无可执行校验？→ URL·DOI·文件·命令·版本·API → 一律�
 
 ## 红线（禁止编造，须核实后才可输出）
 
-URL · DOI · 论文标题与作者 · 法律条文 · 统计数据 · API 名称与参数 · 文件路径 · 命令输出 · 版本号 · 人名与头衔 · 日期 · 价格 · 依赖坐标（group:artifact:version）· 配置项名 · 数据库列名 · **包名与 import 路径** · **基因/蛋白符号与物种** · **ID 体系（Ensembl / Entrez / RefSeq / KEGG / GO / Reactome）** · **通路名与其 ID 的对应** · **统计口径（p vs padj、logFC 底数）** · **PMID**
+URL · DOI · 论文标题与作者 · 法律条文 · 统计数据 · API 名称与参数 · 文件路径 · 命令输出 · 版本号 · 人名与头衔 · 日期 · 价格 · 依赖坐标（group:artifact:version）· 配置项名 · 数据库列名 · **包名与 import 路径** · **基因/蛋白符号与物种** · **ID 体系（Ensembl / Entrez / RefSeq / KEGG / GO / Reactome）** · **通路名与其 ID 的对应** · **统计口径（p vs padj、logFC 底数）** · **PMID** · **工具调用回执（exit_code / 完成状态 / 是否已推送）**
 
 **这些项不靠印象，只靠证据。** 包名一类尤其危险：编造的包名会被抢注成供应链攻击（slopsquatting）。
 
@@ -207,7 +207,11 @@ python3 scripts/dep_guard.py --root . [--offline] [--strict]
 python3 scripts/bio_guard.py --file report.md --offline
 python3 scripts/bio_guard.py --file analysis.R --only orgdb,stat
 
-# 一键跑完整条链：hardcheck → dep_guard → claim_lint
+# 工具调用链核查：顺序 / 闭环 / 幂等 / 前置 / 目标漂移 / 结果误读
+python3 scripts/tool_guard.py --file trace.json
+python3 scripts/tool_guard.py --file trace.json --offline --strict
+
+# 一键跑完整条链：hardcheck → dep_guard → claim_lint（+ --bio / --trace 可选）
 python3 scripts/pipeline.py --root . --checks .touchstone/checks.json \
                         --claims .touchstone/claims.json --level L1
 
@@ -216,9 +220,9 @@ $PY scripts/model_profile.py --model claude-opus-4 --net on
 $PY scripts/model_profile.py --model gpt-4o-mini --net off --json
 
 # 自检（三套，换环境 / 升级 / 发版后跑）
-python3 scripts/selftest.py           # 101 条快速冒烟，秒级
-python3 scripts/robustness_test.py    # 81 条深度：边界/异常/并发/性能/幂等
-python3 scripts/stability_test.py     # 102 条工程一致性：编译/幂等/并发/fuzz/环境/文档与版本/安装同步
+python3 scripts/selftest.py           # 118 条快速冒烟，秒级
+python3 scripts/robustness_test.py    # 93 条深度：边界/异常/并发/性能/幂等
+python3 scripts/stability_test.py     # 104 条工程一致性：编译/幂等/并发/fuzz/环境/文档与版本/安装同步
 ```
 
 脚本原则：**fail-closed**（失败=未验证，不是通过）、**纯标准库**（无 pip 依赖）、**离线可用**（网络失败降级为 `unverified`，不崩溃）。安装或改动后先跑 `selftest.py`，全绿再依赖它。
@@ -328,6 +332,53 @@ python3 scripts/bio_guard.py --root . --exclude 'references/*' --json   # 扫项
 
 ---
 
+## 工具调用模式（多步任务 / 有副作用操作时必读）
+
+> 详见 `references/20-tool-mode.md`。**工具调用幻觉大部分不在"单次调用对不对"，
+> 而在"这条链还记不记得自己在干什么"**——每一步单看都对，连起来看是错的。
+
+**触发**：同一目标上 ≥3 次连续调用；涉及推送/发布/发送/删除/merge/部署等不可逆副作用；
+出现失败与重试；中途换过目标；上下文被截断过（compact / 长任务 / 多会话接力）。
+
+**「调到一半忘了在干什么」的 8 个可观测症状（全部可由调用记录判定，一条都不靠自觉）**：
+
+| # | 症状 | 记录形态 | 闸门条款 |
+|---|---|---|---|
+| 1 | 链断裂 | `seq` 跳号 / 重复 / 乱序 | `order` |
+| 2 | 开了头没下文 | `started` 之后无终态 | `closure` |
+| 3 | 同一操作做两遍 | 非幂等工具同 target 多次 `ok` | `duplicate` |
+| 4 | 撞墙式重试 | 同参数 fail 连续 ≥3 次不换策略 | `retry` |
+| 5 | 凭印象改文件 | 写/改前无同 target 的读取 | `prereq` |
+| 6 | 目标悄悄漂移 | `goal` 中途变且无 `rescope` | `plan` |
+| 7 | 计划被悄悄改写 | `step` 总数中途变且无 `rescope` | `plan` |
+| 8 | 把失败当成功 | `ok` 却 `exit_code≠0` 或带 `error` | `result` |
+
+**五条硬条款**：
+
+1. **先有记录，再谈核查。** 每做完一次调用记一行（seq/tool/target/status/回执），
+   不要攒到最后补——补写的就是回忆，而"忘了"恰恰发生在回忆里。
+2. **`started` 是唯一非终态。** 开了头就必须有 `ok/fail/skipped/aborted` 收尾，否则就是链断了。
+3. **不可逆操作不许裸重复。** 重复推送/发送/删除要在记录里举证：`idempotent:true`（幂等重放）
+   或 `retry_of:N`（补救失败）。**免责靠字段不靠工具名**——`write` 既能建新也能覆盖。
+4. **换目标 / 改计划必须声明 `rescope:true`。** 换目标本身没错，瞒着换才是"忘了"。
+5. **`--strict` 非零 = 不许说"已完成"。** 先补做或修记录，不是改措辞绕过去。
+
+**闸门命令**：
+
+```bash
+PY=python3          # Windows 用 python
+python3 scripts/tool_guard.py --file trace.json                # 核查调用链
+python3 scripts/tool_guard.py --file a.json --file b.json      # 多会话/多子 agent 合并核
+python3 scripts/tool_guard.py --file trace.json --offline --strict
+```
+
+**与既有闸门的分工（不重复造）**：`claim_lint` 管"说的"（输出契约）、
+`hardcheck` 管"引的"（证据真伪）、`dep_guard` 管"用的工具真不真"（调用真伪层）、
+`tool_guard` 管"做的过程接不接得上"（链状态/副作用/前置/目标漂移/结果误读）。
+四者互不替代，交付前都跑（`pipeline.py --trace` 串起来）。
+
+---
+
 ## 输出契约
 
 按 `assets/claim-schema.json`。最低要求：
@@ -373,6 +424,7 @@ python3 scripts/bio_guard.py --root . --exclude 'references/*' --json   # 扫项
 | `references/17-vendor-and-induction.md` | **厂商官方做法（OpenAI/Anthropic 一手）+ 谄媚诱导型幻觉 + 自一致性天花板 + 检测权限分层 + 分档打法手册** |
 | `references/18-math-mode.md` | **数学模式：四层错误与治法 + 强制确定性引擎 + 语义接地双层校验 + 病态题拒答/澄清闸门 + 去锚定** |
 | `references/19-bio-mode.md` | **生物医学模式：物种锁 + 基因命名规范表 + ID/注释库配对 + 口径三连与伪重复 + 外推三闸（含与 cp_lint/sc_lint 的分工）** |
+| `references/20-tool-mode.md` | **工具调用模式：链断裂/副作用重复/凭印象改/目标漂移/结果误读 五类"忘了"的症状表 + 免责字段 + 与 claim_lint/hardcheck/dep_guard 的分工** |
 | `references/09-anti-patterns.md` | 反模式 + 交付前自检表 |
 | `references/10-metrics-regression.md` | 度量指标 + 回归集建设 |
 | `references/11-harness-adapters.md` | Claude Code / DeepSeek / Codex / 通用 harness 适配 |

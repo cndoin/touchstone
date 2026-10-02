@@ -2,7 +2,7 @@
 name: touchstone
 description: Touchstone · anti-hallucination engineering kit (a touchstone is a stone for assaying gold; formerly named dehallucination). **Use ONLY when at least one of these holds:** (1) the output must cite externally decidable facts — URLs, DOIs, papers, legal clauses, API signatures, version numbers, package names, file paths, command output; (2) the domain is high-stakes or irreversible — legal, medical, financial, public release, production operations; (3) it is a large long-running project — multi-session, huge codebase, many subagents — where errors compound; (4) the user explicitly asks for verification — "does this really exist", "verify this", "don't make things up", "is this API/paper/file real", "are you sure it's finished"; (5) the output will be adopted without human review, or the user has stated a position and sycophancy is a risk; (6) **the output contains numeric or symbolic conclusions that will be adopted** — money, tax rates, schedules, capacity, ratios, financial or statistical bases, formula derivations, engineering parameters, or reproducing numbers from a paper (mental arithmetic, wrong bases, and under-specified problems all fall here). **Do NOT load this kit for:** chit-chat, creative writing, formatting tweaks, small single-file edits, small local refactors that run locally, explaining code, one-off quick questions, or a single-point arithmetic question ("what is 3 squared") — these have no externally decidable facts, are reversible and internal; just answer directly. Loading the kit only slows things down and burns tokens.
 license: MIT
-version: 4.4.0
+version: 4.5.0
 ---
 
 # Touchstone · Anti-Hallucination Engineering Kit
@@ -100,7 +100,7 @@ See `references/16-model-adaptation.md`.
 
 ## Red Lines (never generate without verification)
 
-URL · DOI · paper title & authors · legal clauses · statistics · API names & parameters · file paths · command output · version numbers · names & titles · dates · prices · dependency coordinates · config keys · DB column names · **package names & import paths**
+URL · DOI · paper title & authors · legal clauses · statistics · API names & parameters · file paths · command output · version numbers · names & titles · dates · prices · dependency coordinates · config keys · DB column names · **package names & import paths** · **tool-call receipts (exit_code / completion status / pushed-or-not)**
 
 ---
 
@@ -183,11 +183,12 @@ Low-confidence claims **must** carry an alternative ("another plausible answer i
 python3 scripts/hardcheck.py --file ./README.md --cmd "git status --porcelain" --offline
 python3 scripts/dep_guard.py --root . [--offline] [--strict]
 python3 scripts/claim_lint.py --input claims.json --min-level L1
-python3 scripts/pipeline.py --root . --checks checks.json --claims claims.json
+python3 scripts/tool_guard.py --file trace.json [--offline] [--strict]
+python3 scripts/pipeline.py --root . --checks checks.json --claims claims.json --trace trace.json
 python3 scripts/ledger.py check --root . --drift
-python3 scripts/selftest.py            # 101 smoke cases (seconds)
-python3 scripts/robustness_test.py     # 70 deep cases (boundary/anomaly/concurrency/perf)
-python3 scripts/stability_test.py      # 102 engineering-consistency cases
+python3 scripts/selftest.py            # 118 smoke cases (seconds)
+python3 scripts/robustness_test.py     # 93 deep cases (boundary/anomaly/concurrency/perf)
+python3 scripts/stability_test.py      # 104 engineering-consistency cases
 python3 scripts/audit.py               # open-source compliance audit
 ```
 
@@ -222,6 +223,59 @@ Exit codes: `0` pass · `1` failed · `2` unverified · `3` usage/input error
    **Never silently invent a value** to produce a unique answer; if you must assume, flag it and give sensitivity.
    ⚠ This layer **does not improve with a stronger model, nor with more thinking time** — on the Soohak refusal subset **no model exceeds 50%**; and inference-time thinking mode **reduces** proactive critical thinking in untrained models. Do not use "check it again more carefully" as a gate.
 4. **When checking an answer, the judge must commit its own answer first** (this is Iron Rule 2 in the math domain). Reversing the order zeroes out the whole verification chain — seeing the candidate first pushes the false-positive rate from 0.012 back to 0.719.
+
+---
+
+## Tool-call mode (read this for multi-step tasks or irreversible side effects)
+
+> See `references/20-tool-mode.md`. **Most tool-call hallucination is not "was this
+> call correct" but "does this chain still remember what it was doing"** — each step
+> looks fine alone, yet the chain is wrong when read end to end.
+
+**Triggers**: ≥3 consecutive calls toward one target; irreversible side effects
+(push / publish / send / delete / merge / deploy); any failure-and-retry; a mid-task
+goal change; a truncated context (compact / long task / multi-session handoff).
+
+**Eight observable symptoms of "forgot what I was doing mid-way"** (all decidable
+from the call trace — none rely on self-awareness):
+
+| # | Symptom | Trace shape | Checker |
+|---|---|---|---|
+| 1 | Chain broken | `seq` gap / repeat / out of order | `order` |
+| 2 | Started, never finished | `started` with no terminal state | `closure` |
+| 3 | Same action twice | non-idempotent tool, same target, repeated `ok` | `duplicate` |
+| 4 | Head-banging retry | identical args fail ≥3× with no strategy change | `retry` |
+| 5 | Editing from memory | write/edit with no prior read of the target | `prereq` |
+| 6 | Silent goal drift | `goal` changes mid-way without `rescope` | `plan` |
+| 7 | Silent plan rewrite | `step` total changes without `rescope` | `plan` |
+| 8 | Failure read as success | `ok` yet `exit_code≠0` or an `error` field | `result` |
+
+**Five hard clauses**:
+
+1. **Record first, verify second.** Log one line per call (seq/tool/target/status/receipt)
+   as you go — back-filling is writing from memory, and "forgetting" lives exactly there.
+2. **`started` is the only non-terminal state.** Every start must end in
+   `ok/fail/skipped/aborted`, or the chain is broken.
+3. **No naked repeats of irreversible actions.** Repeated push/send/delete must carry
+   evidence: `idempotent:true` (safe replay) or `retry_of:N` (remediation).
+   **Exemption comes from fields, never from tool names** — `write` both creates and overwrites.
+4. **Goal/plan changes require `rescope:true`.** Changing direction is fine; hiding it
+   is the "forgot" failure mode.
+5. **`--strict` non-zero = never say "done".** Go back and finish the work — do not
+   reword the claim past the gate.
+
+**Gate**:
+
+```bash
+python3 scripts/tool_guard.py --file trace.json --offline --strict
+```
+
+**Division of labour (do not rebuild what exists)**: `claim_lint` guards what you *say*
+(output contract), `hardcheck` guards what you *cite* (evidence truth), `dep_guard`
+guards whether the tools you *use* are real (call-authenticity layer), `tool_guard`
+guards whether what you *did* connects up (chain state / side effects / prerequisites /
+goal drift / result misreading). None substitutes for another; run all before delivery
+(`pipeline.py --trace` chains them).
 
 ---
 
@@ -270,5 +324,7 @@ Exit codes: `0` pass · `1` failed · `2` unverified · `3` usage/input error
 | `references/16-model-adaptation.md` | Model tiers: strong models self-check, weak models use scripts; vendor mechanisms |
 | `references/17-vendor-and-induction.md` | **Vendor official approaches (OpenAI/Anthropic, first-party) + sycophancy-induced hallucination + self-consistency ceiling + detector-permission tiers + per-tier playbook** |
 | `references/18-math-mode.md` | **Math mode: four error layers and their treatments + forced deterministic engine + two-layer semantic groundedness check + ill-posed abstain/clarify gate + de-anchoring** |
+| `references/19-bio-mode.md` | **Biomedical mode: species lock + gene naming tables + ID/annotation pairing + statistic nomenclature + extrapolation gates (incl. division of labour with cp_lint/sc_lint)** |
+| `references/20-tool-mode.md` | **Tool-call mode: five "forgot" failure families (broken chain / duplicated side effects / editing from memory / goal drift / result misreading) + exemption fields + division of labour with claim_lint/hardcheck/dep_guard** |
 
 License & attribution: `LICENSE` (MIT) · `NOTICE` · `ATTRIBUTIONS.md` (sources, licenses, primary/secondary tagging) · `CITATION.cff`.

@@ -22,9 +22,9 @@
 ## 开发流程
 
 ```bash
-python3 scripts/selftest.py          # 快速冒烟（101 条，秒级）
-python3 scripts/robustness_test.py   # 深度健壮性（81 条）
-python3 scripts/stability_test.py    # 工程一致性（102 条，含文档/版本/安装同步）
+python3 scripts/selftest.py          # 快速冒烟（118 条，秒级）
+python3 scripts/robustness_test.py   # 深度健壮性（93 条）
+python3 scripts/stability_test.py    # 工程一致性（104 条，含文档/版本/安装同步）
 python3 scripts/audit.py --strict    # 开源合规审计（WARN 也算失败）
 
 # 元数据与资产校验（需要 PyYAML，仅本地/CI 用，不进产品代码）
@@ -37,10 +37,10 @@ python3 .github/validate-metadata.py
 `audit.py --strict` 与 `validate-metadata.py` 单独跑。
 
 > `stability_test.py` 的 G 组会拿工作区和安装目录逐字节比对（2 条）。
-> 跳过它时加 `--no-install-check`，此时是 **100 条** ——
-> **不是 102 条少了两条测试，是 G 组整体跳过**。
+> 跳过它时加 `--no-install-check`，此时是 **102 条** ——
+> **不是 104 条少了两条测试，是 G 组整体跳过**。
 > 安装目录不在默认位置时设 `TOUCHSTONE_INSTALLED=/path/to/skill`。
-> CI 里没有安装目录，所以 CI 跑的就是 100 条。
+> CI 里没有安装目录，所以 CI 跑的就是 102 条。
 
 ---
 
@@ -153,7 +153,7 @@ scripts/*.py     只向下依赖 _common，**互不 import**
 
 判据一句话：**能不能只看「当前产物 + 给定输入」就给出确定判定？**
 
-- 能 → 进链（`hardcheck` / `dep_guard` / `claim_lint` / `bio_guard`）
+- 能 → 进链（`hardcheck` / `dep_guard` / `claim_lint` / `bio_guard` / `tool_guard`）
 - 不能 → 单独跑。分别是：需要时间维度（`regression`）、需要人
   （`ledger` / `model_profile`）、需要多轮采样（`selfcheck`）、
   对象是自己的运行时而不是交付物（三套测试）、

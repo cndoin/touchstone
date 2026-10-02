@@ -109,13 +109,13 @@ python3 scripts/selfcheck.py --samples examples/samples.json
 # 7) 回归集
 python3 scripts/regression.py --cases assets/regression-cases.json
 
-# 8) 快速自检（101 条，秒级；每次改动后跑）
+# 8) 快速自检（118 条，秒级；每次改动后跑）
 python3 scripts/selftest.py
 
-# 9) 深度健壮性测试（81 条；发版前 / 换环境后跑）
+# 9) 深度健壮性测试（93 条；发版前 / 换环境后跑）
 python3 scripts/robustness_test.py
 
-# 10) 工程一致性 / 稳定性测试（102 条；发版前跑）
+# 10) 工程一致性 / 稳定性测试（104 条；发版前跑）
 python3 scripts/stability_test.py
 ```
 
@@ -163,16 +163,16 @@ python3 scripts/stability_test.py
 | | `selftest.py` | `robustness_test.py` | `stability_test.py` |
 |---|---|---|---|
 | 定位 | 快速冒烟 | 深度健壮性 | 工程一致性 |
-| 用例 | 101 条 | 81 条 | 102 条（`--no-install-check` 时 100 条） |
+| 用例 | 118 条 | 93 条 | 104 条（`--no-install-check` 时 102 条） |
 | 覆盖 | 正常路径 + 关键失败路径 | 边界 / 异常 / 编码 / 并发 / 性能 / 幂等 / 极端参数 | 编译 / 幂等 / 并发写 / 垃圾输入 fuzz / 环境（GBK·离线·只读·非 ASCII 路径）/ 文档一致性（版本号 / 铁律条数 / 测试条数 / 引用路径 / 资产合法性）/ 安装目录同步 |
 | 耗时 | 秒级 | 几十秒 | 几分钟（含 16 路并发与 200KB 级输入） |
 | 何时跑 | 每次改动后 | 发版前、换环境后 | 发版前（尤其动过 hook、文档或版本号后） |
 
 > `stability_test.py` 的 G 组会拿工作区与安装目录逐字节比对，**必须本地装过这个 skill 才有意义**。
-> 所以在 CI 或干净 clone 里跑时会自动降级为 100 条（G 组跳过）——
+> 所以在 CI 或干净 clone 里跑时会自动降级为 102 条（G 组跳过）——
 > 想显式跳过加 `--no-install-check`；安装目录不在默认位置时设
 > `TOUCHSTONE_INSTALLED=/path/to/skill`。
-> **102 条是本地完整模式的数字，100 条不是"少了测试"。**
+> **104 条是本地完整模式的数字，102 条不是"少了测试"。**
 
 前两套回答"脚本能不能跑对"，第三套回答"**整个技能包有没有烂掉**"——
 某个 hook 被改出语法错误、文档写的版本号和 `VERSION` 文件不一致、
@@ -225,8 +225,11 @@ touchstone/
 │   ├── 15-stability-performance.md  特殊环境稳定性、缓存/并发/预算、防崩溃纪律
 │   ├── 16-model-adaptation.md    模型分档：强模型自查 vs 弱模型全走脚本
 │   ├── 17-vendor-and-induction.md  厂商官方机制 + 诱导型 / 谄媚型幻觉
+│   ├── 18-math-mode.md           数学模式：四层错误与治法 + 强制确定性引擎
+│   ├── 19-bio-mode.md           生物医学模式：物种锁 + ID 配对 + 口径三连 + 外推三闸
+│   ├── 20-tool-mode.md           工具调用模式：链状态 / 副作用 / 目标漂移 / 结果误读
 │   └── _deprecated-v1/           v1 旧稿，仅留档，不参与当前流程
-├── scripts/                      可执行闸门（纯标准库，14 个）
+├── scripts/                      可执行闸门（纯标准库，16 个）
 │   ├── _common.py                公共工具（fail-closed 语义、退出码约定）
 │   ├── hardcheck.py              URL / DOI / 文件 / 命令 / PyPI / npm
 │   ├── claim_lint.py             输出契约闸门（逻辑一致性，不只是格式）
@@ -234,16 +237,19 @@ touchstone/
 │   ├── selfcheck.py              采样一致性统计
 │   ├── regression.py             回归集
 │   ├── dep_guard.py              依赖与符号幻觉防护（幻影 import / 包幻觉 / slopsquatting）
+│   ├── bio_guard.py              生物医学声明核查（物种 / ID / 统计口径 / 外推边界）
+│   ├── tool_guard.py             工具调用链核查（顺序 / 闭环 / 幂等 / 目标漂移）
 │   ├── model_profile.py          模型能力分档 → 核查策略推荐（适配强弱模型）
 │   ├── verifiers.py              可插拔检测器桥接（外部检测器探测）
-│   ├── pipeline.py               一键编排：hardcheck → dep_guard → claim_lint
+│   ├── pipeline.py               一键编排：hardcheck → dep_guard → claim_lint（+ bio / trace 可选）
 │   ├── audit.py                  开源合规审计（许可证头 / 零依赖 / 隐私 / 版本一致）
-│   ├── selftest.py               快速自检（101 条，秒级）
-│   ├── robustness_test.py        深度健壮性测试（81 条：边界/异常/并发/性能/幂等）
-│   └── stability_test.py         工程一致性测试（102 条：编译/幂等/并发/fuzz/环境/文档一致/安装同步）
+│   ├── selftest.py               快速自检（118 条，秒级）
+│   ├── robustness_test.py        深度健壮性测试（93 条：边界/异常/并发/性能/幂等）
+│   └── stability_test.py         工程一致性测试（104 条：编译/幂等/并发/fuzz/环境/文档一致/安装同步）
 ├── assets/
 │   ├── claim-schema.json         输出契约 JSON Schema
 │   ├── ledger-schema.json        账本 JSON Schema
+│   ├── tool-trace-schema.json    工具调用链 JSON Schema（记录契约）
 │   ├── regression-cases.json     回归集模板
 │   ├── ci/github-actions.yml     CI 闸门示例（给使用方抄的）
 │   └── templates/                claims / checks / 子 agent 核查模板
@@ -275,7 +281,7 @@ cd touchstone
 装完先验证一次：
 
 ```bash
-python scripts/selftest.py     # Windows 用 python；应输出 101/101 通过
+python scripts/selftest.py     # Windows 用 python；应输出 118/118 通过
 ```
 
 > Windows 用户注意：脚本已强制 UTF-8 输出，但**建议在 PowerShell 里先执行
