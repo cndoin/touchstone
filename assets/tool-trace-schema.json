@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/cndoin/touchstone/main/assets/tool-trace-schema.json",
+  "title": "Touchstone 工具调用链记录 v1",
+  "description": "记录一次任务里发生的工具调用序列。它的用途不是审计「做了什么」，而是让「调到一半忘记前面在干什么」这类状态漂移变成可判定项。只记结构与状态，不记敏感参数值。",
+  "type": "object",
+  "required": ["trace"],
+  "properties": {
+    "partial": {
+      "type": "boolean",
+      "default": false,
+      "description": "这份记录是不是片段（只截取了中间若干次调用）。为 true 时，order 检查器对「seq 不从 1 开始 / 有跳号」降级为 unverified 而不是 fail —— 片段本来就不该被判成完整链。**别拿它当挡箭牌**：完整记录必须为 false，否则『没忘记前面』永远无法被证明。"
+    },
+    "goal": {
+      "type": "string",
+      "description": "本次任务的目标，一句话。链中途要换目标时，对应记录必须打 rescope:true。"
+    },
+    "trace": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/call" }
+    }
+  },
+  "definitions": {
+    "call": {
+      "type": "object",
+      "required": ["seq", "tool", "status"],
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "调用序号。必须从 1 开始连续递增 —— 跳号意味着有调用没进记录，链就断了。"
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "工具名。按小写比对，Read / read / READ 视为同一个。"
+        },
+        "target": {
+          "type": "string",
+          "description": "操作对象（文件路径 / 资源 id / 订单号）。闭环、幂等、前置依赖都按它比对，**留空会让这三项检查失效**。"
+        },
+        "args": {
+          "type": "object",
+          "description": "参数（可脱敏，只保留影响结果的部分）。retry 检查器用它判断『是不是换了策略再试』。"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "fail", "skipped", "started", "aborted"],
+          "description": "ok=成功 fail=失败 skipped=跳过 started=已发起未结束 aborted=主动中止。started 是唯一非终态，必须有后续终态闭环。"
+        },
+        "exit_code": {
+          "type": ["integer", "null"],
+          "description": "进程退出码。status=ok 时它必须是 0 或省略 —— 不是的话就是结果误读。"
+        },
+        "error": {
+          "type": "string",
+          "description": "失败原因。status=fail 时必须写；不写等于没记录为什么失败，下次只会盲试。"
+        },
+        "goal": {
+          "type": "string",
+          "description": "本次调用服务的目标。链中途改变时必须同时打 rescope:true。"
+        },
+        "step": {
+          "type": ["string", "null"],
+          "description": "步骤标记，形如 '3/7'。分母表示计划总步数 —— 分母中途改变说明计划被改了却没声明。"
+        },
+        "idempotent": {
+          "type": "boolean",
+          "default": false,
+          "description": "声明本次调用是幂等重放（重复执行不产生额外副作用）。非幂等工具在同一 target 上重复出现时，**要靠它来免责**。"
+        },
+        "creates": {
+          "type": "boolean",
+          "default": false,
+          "description": "声明本次是新建资源（此前不存在），因此不需要「改前未读」。写类工具作用于新文件/新资源时必须打上，否则 prereq 会判 FAIL —— 因为闸门无法区分「新建」与「覆盖了旧文件却没读过」。"
+        },
+        "rescope": {
+          "type": "boolean",
+          "default": false,
+          "description": "声明目标/计划在此处合法变更（需求变了、发现了新情况）。plan 检查器据此放行。"
+        },
+        "retry_of": {
+          "type": ["integer", "null"],
+          "description": "本次是对第几条的重试。写了它，重复调用的意图就明确了。"
+        },
+        "consumes": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "本次调用依赖的前置 seq。只能指向自己之前已存在的记录 —— 指向未来或不存在的序号即为链断裂。"
+        }
+      }
+    }
+  }
+}
