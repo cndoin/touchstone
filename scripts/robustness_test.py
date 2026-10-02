@@ -376,6 +376,103 @@ def test_bio_guard(res, tmp, paths):
           expect_exit=3)
 
 
+def test_tool_guard(res, tmp, paths):
+    """调用链闸门的边界：编码地狱 / 二进制 / 空文件 / 混型数组 / 超长行 / 大记录量。
+
+    fail-closed 优先级最高：解析不了的输入必须是**失败**（exit 1），
+    绝不许崩（退出码不在 0/1/2/3）或放过（exit 0）。
+    """
+    g = "tool_guard"
+    t = os.path.join(tmp, "tool-robust")
+    os.makedirs(t, exist_ok=True)
+
+    def _w(name, text, encoding="utf-8"):
+        p = os.path.join(t, name)
+        with open(p, "w", encoding=encoding, errors="replace") as f:
+            f.write(text)
+        return p
+
+    ok_rec = '{"seq": 1, "tool": "read", "target": "a.py", "status": "ok"}'
+
+    # GBK 编码的合法 JSON：中文乱码可容忍，崩溃不可容忍
+    gbk = _w("gbk.json",
+             '{"goal": "目标漂移检查", "trace": [%s]}' % ok_rec, encoding="gbk")
+    check(res, g, "GBK 编码记录 → 不崩",
+          *run("tool_guard.py", ["--file", gbk, "--json"]), need_json=True)
+
+    # 二进制 / 空文件：解析不了就是失败（fail-closed），不是崩溃也不是通过
+    binp = os.path.join(t, "bin.json")
+    with open(binp, "wb") as f:
+        f.write(b"\x00\x01\x02\xff\xfe not json \x00")
+    check(res, g, "二进制文件 → fail-closed（失败而非崩溃/通过）",
+          *run("tool_guard.py", ["--file", binp, "--json"]), expect_exit=1)
+    empty = _w("empty.json", "")
+    check(res, g, "空文件 → fail-closed",
+          *run("tool_guard.py", ["--file", empty, "--json"]), expect_exit=1)
+
+    # 空链不是缺陷：无链可查 ≠ 链有问题
+    empty_arr = _w("empty_array.json", '{"goal": "x", "trace": []}')
+    check(res, g, "空 trace 数组 → 放行（无链可查不是缺陷）",
+          *run("tool_guard.py", ["--file", empty_arr, "--json"]), expect_exit=0)
+
+    # 数组混入非对象 / 字段类型错 / 枚举错 → schema 拦
+    mixed = _w("mixed.json", '[%s, 42, "oops"]' % ok_rec)
+    check(res, g, "记录数组混入非对象 → schema 拦",
+          *run("tool_guard.py", ["--file", mixed, "--json"]), expect_exit=1)
+    badfields = _w("badfields.json", '{"trace": [{"seq": "1", "tool": "read", '
+                   '"target": "a", "status": "OK", "consumes": "x"}]}')
+    check(res, g, "seq 类型错 / status 枚举错 / consumes 非数组 → schema 拦",
+          *run("tool_guard.py", ["--file", badfields, "--json"]), expect_exit=1)
+
+    # 超长单行（100k 字符 target）不崩
+    long_t = _w("long.json", '{"trace": [{"seq": 1, "tool": "write", '
+                '"target": "%s", "status": "ok", "creates": true}]}' % ("x" * 100000))
+    check(res, g, "超长单行 target（100k 字符）→ 不崩",
+          *run("tool_guard.py", ["--file", long_t, "--json"]), need_json=True)
+
+    # 大记录量（500 条）不崩
+    many = [json.dumps({"seq": i + 1, "tool": "read", "target": "f%d.py" % i,
+                        "status": "ok"}) for i in range(500)]
+    many_p = _w("many.jsonl", "\n".join(many) + "\n")
+    check(res, g, "500 条记录（JSONL）→ 不崩",
+          *run("tool_guard.py", ["--file", many_p, "--json"]), need_json=True)
+
+    # 中文空格路径不崩（Windows 下这类路径最容易炸）
+    cn_dir = os.path.join(tmp, "中文 目录")
+    os.makedirs(cn_dir, exist_ok=True)
+    cn_p = os.path.join(cn_dir, "记录 文件.json")
+    with open(cn_p, "w", encoding="utf-8") as f:
+        f.write('{"trace": [%s]}' % ok_rec)
+    check(res, g, "中文空格路径 → 不崩",
+          *run("tool_guard.py", ["--file", cn_p, "--json"]), need_json=True)
+
+    # 多文件合并：一份坏 → 整体拦，但两份都要有结论（好文件不能被坏文件吃掉）
+    good_p = _w("merge_good.json", '{"trace": [%s]}' % ok_rec)
+    bad_p = _w("merge_bad.json", "{broken")
+    code, out, err = run("tool_guard.py",
+                         ["--file", good_p, "--file", bad_p, "--json"])
+    try:
+        tgts = " ".join(x.get("target", "") for x in json.loads(out)["results"])
+    except Exception:
+        tgts = ""
+    res.add(g, "多文件合并：坏文件拦下且好文件仍有结论",
+            code == 1 and "merge_good" in tgts and "merge_bad" in tgts,
+            "exit=%s targets=%s" % (code, tgts[:160]))
+
+    # --max-retry 边界：0 是用法错误（阈值至少 1），不是内部崩溃
+    check(res, g, "--max-retry 0 → 用法错误",
+          *run("tool_guard.py", ["--file", good_p, "--max-retry", "0"]),
+          expect_exit=3)
+
+    # partial 片段记录：跳号降级为 unverified 而不是 fail ——
+    # 记录方声明了"这只是片段"，就不该按完整链的标准判死
+    part = _w("partial.json", '{"partial": true, "trace": ['
+              '{"seq": 1, "tool": "read", "target": "a.py", "status": "ok"}, '
+              '{"seq": 3, "tool": "read", "target": "b.py", "status": "ok"}]}')
+    check(res, g, "partial 片段记录跳号 → 降级 unverified（退出码 2）",
+          *run("tool_guard.py", ["--file", part, "--json"]), expect_exit=2)
+
+
 def test_pipeline(res, tmp, paths):
     g = "pipeline"
     check(res, g, "root 不存在 → 用法错误",
@@ -599,8 +696,8 @@ def main(argv=None):
         print("\n用法：python scripts/robustness_test.py [--json] [--only=组名,组名]")
         print("可选组：%s" % ", ".join(
             ["hardcheck", "dep_guard", "claim_lint", "ledger", "selfcheck",
-             "regression", "pipeline", "bio_guard", "hooks", "long_line",
-             "extreme", "perf"]))
+             "regression", "pipeline", "bio_guard", "tool_guard", "hooks",
+             "long_line", "extreme", "perf"]))
         print("说明：跑完全部检查项后按失败数决定退出码。")
         return 0
     as_json = "--json" in argv
@@ -622,6 +719,7 @@ def main(argv=None):
             "regression": lambda: test_regression(res, tmp),
             "pipeline": lambda: test_pipeline(res, tmp, paths),
             "bio_guard": lambda: test_bio_guard(res, tmp, paths),
+            "tool_guard": lambda: test_tool_guard(res, tmp, paths),
             "hooks": lambda: test_hooks(res, tmp),
             "long_line": lambda: test_long_line(res, tmp, paths),
             "extreme": lambda: test_extreme(res, tmp, paths),

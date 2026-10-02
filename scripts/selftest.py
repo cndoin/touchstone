@@ -545,6 +545,159 @@ MAX_TARGETS = 10
         case("pipeline 不传 --bio 时该步跳过（不影响总判定）",
              [pl, "--root", tmp, "--no-deps", "--offline"], 0)
 
+    # --- v4.5 新增：工具调用链核查（20-tool-mode / tool_guard.py）-----
+    # 设计要点：合规样本必须零告警；反例覆盖「调到一半忘了在干什么」的
+    # 五种形态（链断 / 手重 / 凭印象改 / 目标漂 / 结果误读）。
+    # 免责字段（idempotent / creates / rescope / retry_of）必须真的放行 ——
+    # 误报太多的闸门会被绕过，等于没有闸门。
+    tg = os.path.join(HERE, "tool_guard.py")
+    if os.path.exists(tg):
+        tdir = os.path.join(tmp, "tool")
+        os.makedirs(tdir, exist_ok=True)
+
+        def _trace(name, trace, goal="给 pipeline 加第 5 步并验证", wrap=True):
+            p = os.path.join(tdir, name)
+            with open(p, "w", encoding="utf-8") as f:
+                if wrap:
+                    json.dump({"goal": goal, "trace": trace}, f, ensure_ascii=False)
+                else:
+                    for r in trace:
+                        f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            return p
+
+        g_goal = "给 pipeline 加第 5 步并验证"
+        good_tg = _trace("good.json", [
+            {"seq": 1, "tool": "read", "target": "a.py", "status": "ok",
+             "goal": g_goal, "step": "1/3"},
+            {"seq": 2, "tool": "edit", "target": "a.py", "status": "ok",
+             "goal": g_goal, "step": "2/3", "consumes": [1]},
+            {"seq": 3, "tool": "commit", "target": "repo", "status": "ok",
+             "goal": g_goal, "step": "3/3", "exit_code": 0},
+        ])
+        case("tool_guard 合规链零告警（不误报）", [tg, "--file", good_tg], 0)
+
+        # 干净链也必须出 PASS 项 —— 「合计 0」等于没把话说完，
+        # 而没把话说完本身就是假信号（与诊断工具同一教训）。
+        _ct, _ot, _ = run([tg, "--file", good_tg, "--json"])
+        try:
+            _tsum = json.loads(_ot)["summary"]
+        except Exception:
+            _tsum = {}
+        results.append(Result(
+            "tool_guard 干净链逐检查器出 PASS（合计可核对，非「合计 0」）",
+            _tsum.get("total") == 8 and _tsum.get("pass") == 8
+            and _tsum.get("fail") == 0,
+            "total=8 pass=8 fail=0",
+            "total=%s pass=%s fail=%s" % (_tsum.get("total"), _tsum.get("pass"),
+                                          _tsum.get("fail"))))
+
+        b_goal = "发布 v2.0 并通知下游"
+        bad_tg = _trace("bad.json", [
+            {"seq": 1, "tool": "read", "target": "a.py", "status": "ok",
+             "goal": b_goal, "step": "1/4"},
+            {"seq": 3, "tool": "push", "target": "origin/main", "status": "ok",
+             "goal": b_goal, "step": "3/4"},
+            {"seq": 4, "tool": "push", "target": "origin/main", "status": "ok",
+             "goal": b_goal, "step": "3/4"},
+            {"seq": 5, "tool": "write", "target": "cfg.yaml", "status": "ok",
+             "goal": "发布 v2.1 并通知下游", "step": "2/3"},
+            {"seq": 6, "tool": "tag", "target": "v2.0", "status": "started"},
+        ], goal=b_goal)
+        case("tool_guard 反例被拦（链断/重复推送/未读就写/目标漂/未闭环）",
+             [tg, "--file", bad_tg], 1)
+
+        # 五种「忘了」必须各有各的检查器命中，不能一锅端只报一条
+        _cb, _ob, _ = run([tg, "--file", bad_tg, "--json"])
+        try:
+            _kinds = {x["kind"] for x in json.loads(_ob)["results"]
+                      if x.get("status") == "fail"}
+        except Exception:
+            _kinds = set()
+        results.append(Result(
+            "tool_guard 五类症状各有命中（order/duplicate/prereq/plan/closure）",
+            {"order", "duplicate", "prereq", "plan", "closure"} <= _kinds,
+            "五类全命中", ",".join(sorted(_kinds))))
+
+        # 免责字段必须真的放行：同 target 重复 push 声明 idempotent、
+        # 新建文件声明 creates、换目标声明 rescope —— 三者都不该再报。
+        free_tg = _trace("free.json", [
+            {"seq": 1, "tool": "write", "target": "new.yaml", "status": "ok",
+             "goal": g_goal, "step": "1/3", "creates": True},
+            {"seq": 2, "tool": "push", "target": "origin/main", "status": "ok",
+             "goal": g_goal, "step": "2/3", "idempotent": True},
+            {"seq": 3, "tool": "push", "target": "origin/main", "status": "ok",
+             "goal": g_goal, "step": "2/3", "idempotent": True},
+            {"seq": 4, "tool": "bash", "target": "make", "status": "ok",
+             "goal": "换了个目标", "step": "3/3", "rescope": True},
+        ])
+        case("tool_guard 免责字段生效（idempotent/creates/rescope 不误报）",
+             [tg, "--file", free_tg], 0)
+
+        # retry_of 指向失败调用 → 补救不算重复副作用。
+        # 这条 trace 里有两次 ok 推送：没有 retry_of 免责时 duplicate 必报，
+        # 有了才放行 —— 免责代码路径因此是真被覆盖的，不是摆设。
+        ro_tg = _trace("retry_ok.json", [
+            {"seq": 1, "tool": "write", "target": "new.yaml", "status": "ok",
+             "goal": g_goal, "creates": True},
+            {"seq": 2, "tool": "push", "target": "origin/main", "status": "ok",
+             "goal": g_goal},
+            {"seq": 3, "tool": "push", "target": "origin/main", "status": "fail",
+             "goal": g_goal, "exit_code": 1, "error": "upstream busy"},
+            {"seq": 4, "tool": "push", "target": "origin/main", "status": "ok",
+             "goal": g_goal, "retry_of": 3},
+        ])
+        case("tool_guard retry_of 补救失败不算重复副作用",
+             [tg, "--file", ro_tg], 0)
+
+        # --max-retry 可调：2 次原样失败在默认阈值 3 下放行、阈值 2 时拦下
+        r2_tg = _trace("retry2.json", [
+            {"seq": 1, "tool": "bash", "target": "build.sh", "status": "fail",
+             "goal": g_goal, "exit_code": 1},
+            {"seq": 2, "tool": "bash", "target": "build.sh", "status": "fail",
+             "goal": g_goal, "exit_code": 1},
+        ])
+        case("tool_guard 重试阈值默认 3（2 连败放行）", [tg, "--file", r2_tg], 0)
+        case("tool_guard --max-retry 2 收紧阈值（2 连败拦下）",
+             [tg, "--file", r2_tg, "--max-retry", "2"], 1)
+
+        # 结果误读：ok 却 exit_code=1
+        mis_tg = _trace("misread.json", [
+            {"seq": 1, "tool": "bash", "target": "a.sh", "status": "ok",
+             "goal": g_goal, "exit_code": 1},
+        ])
+        case("tool_guard 结果误读被拦（ok 却 exit_code=1）",
+             [tg, "--file", mis_tg], 1)
+
+        # JSONL 形态同样可解析（多会话各记各的，合并核查）
+        jsonl_tg = _trace("good.jsonl", [
+            {"seq": 1, "tool": "read", "target": "a.py", "status": "ok",
+             "goal": g_goal, "step": "1/2"},
+            {"seq": 2, "tool": "commit", "target": "repo", "status": "ok",
+             "goal": g_goal, "step": "2/2"},
+        ], wrap=False)
+        case("tool_guard JSONL 输入可解析", [tg, "--file", jsonl_tg], 0)
+
+        # --only 选择器：只跑 schema（反例的 schema 本身是干净的）→ 放行
+        case("tool_guard --only 只跑指定检查器", [tg, "--file", bad_tg, "--only", "schema"], 0)
+        case("tool_guard 未知检查器 → 用法错误",
+             [tg, "--file", good_tg, "--only", "not-a-check"], 3)
+        case("tool_guard 无目标 → 用法错误", [tg], 3)
+        case("tool_guard 文件不存在 → 用法错误",
+             [tg, "--file", os.path.join(tdir, "nope.json")], 3)
+
+        # 坏 JSON 必须 fail-closed：是失败，不是崩溃（2），更不是通过（0）
+        broken = os.path.join(tdir, "broken.json")
+        with open(broken, "w", encoding="utf-8") as f:
+            f.write("{not json at all")
+        case("tool_guard 坏记录 fail-closed（失败而非崩溃/通过）",
+             [tg, "--file", broken], 1)
+
+        # pipeline 接入：工具链步骤与其它步骤同等的「可选 / 失败即拦」
+        case("pipeline --trace 串联工具链核查（坏样本 → 拦）",
+             [pl, "--root", tmp, "--no-deps", "--offline", "--trace", bad_tg], 1)
+        case("pipeline --trace 串联工具链核查（合规样本 → 放行）",
+             [pl, "--root", tmp, "--no-deps", "--offline", "--trace", good_tg], 0)
+
     # audit.py：发布前自检脚本，此前**零测试覆盖** —— 一个检查别人合规性的
     # 脚本自己不在任何检查范围内，是明显的结构性盲区。
     au = os.path.join(HERE, "audit.py")
