@@ -9,7 +9,8 @@
   [2] dep_guard  依赖与符号幻觉防护（幻影 import / 包幻觉 / slopsquatting）
   [3] claim_lint 输出契约闸门
   [4] bio_guard  生物医学声明核查（可选，生信/医学场景用 --bio 打开）
-  [5] 汇总       → 一份报告 + 一个退出码
+  [5] tool_guard 工具调用链核查（可选，多步/有副作用的任务用 --trace 打开）
+  [6] 汇总       → 一份报告 + 一个退出码
 
 设计原则：
   - 每一步独立失败不影响其它步骤执行完（但最终退出码取最严重者）
@@ -33,6 +34,7 @@
                      --claims .touchstone/claims.json --level L1
   python pipeline.py --root . --offline --no-deps --json --report report.json
   python pipeline.py --root . --offline --bio report.md      # 生信报告
+  python pipeline.py --root . --offline --trace trace.json   # 工具调用链
 
 退出码：0=全通过 1=存在失败（不许交付） 2=存在未验证 3=用法错误
 """
@@ -74,6 +76,8 @@ def main(argv=None):
     p.add_argument("--strict-deps", action="store_true", help="依赖检查把可疑项也当失败")
     p.add_argument("--bio", metavar="FILE|auto",
                    help="生物医学声明核查（19-bio-mode）：报告/脚本路径；auto=扫 --root")
+    p.add_argument("--trace", action="append", default=[], metavar="FILE",
+                   help="工具调用链记录（20-tool-mode），可重复给多份（多会话/多子 agent）")
     p.add_argument("--json", action="store_true", help="stdout 输出 JSON")
     p.add_argument("--report", help="报告写入该 JSON 文件")
     a = p.parse_args(argv)
@@ -169,6 +173,28 @@ def main(argv=None):
     else:
         steps.append({"step": "bio_guard", "exit_code": None,
                       "skipped": "未提供 --bio（生信场景用 --bio <文件> 或 --bio auto）"})
+
+    # [5] 工具调用链核查（可选；多步/有副作用的任务才需要）
+    if a.trace:
+        args = [os.path.join(HERE, "tool_guard.py")]
+        for t in a.trace:
+            args += ["--file", t]
+        if a.offline:
+            args.append("--offline")
+        args.append("--json")
+        code, out, errout = run_step(args, cwd=root)
+        data = None
+        try:
+            data = json.loads(out)
+        except Exception:
+            pass
+        steps.append({"step": "tool_guard", "exit_code": code,
+                      "summary": (data or {}).get("summary"),
+                      "stderr": errout.strip()[:300]})
+        worst = max(worst, SEVERITY.get(code, 3))
+    else:
+        steps.append({"step": "tool_guard", "exit_code": None,
+                      "skipped": "未提供 --trace（多步/有副作用的任务用 --trace <记录>）"})
 
     final = {v: k for k, v in SEVERITY.items()}[worst]
     verdict = {0: "PASSED", 1: "UNVERIFIED", 2: "BLOCKED", 3: "ERROR"}[worst]
